@@ -243,8 +243,8 @@ export const PromotionStories: React.FC<PromotionStoriesProps> = ({ onSelectRest
           const product = doc.data() as Product;
           const merchant = merchantsMap[product.restaurantId];
 
-          // REGRA DE OURO: Só conta a promoção se a loja estiver ABERTA e VÁLIDA
-          if (merchant && isRestaurantOpen(merchant)) {
+          // REGRA DE OURO CORRIGIDA: Só conta a promoção se a loja estiver APROVADA, ABERTA e VÁLIDA
+          if (merchant && merchant.status === 'approved' && isRestaurantOpen(merchant)) {
               // Verificar se tem desconto REAL (Original > Preço Atual)
               if (product.originalPrice && product.originalPrice > product.price) {
                 if (product.categoryId) {
