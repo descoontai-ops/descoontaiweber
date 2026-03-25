@@ -6,30 +6,33 @@ import { MerchantProductForm } from './MerchantProductForm';
 import { MerchantGroupManager } from './MerchantGroupManager';
 
 interface MerchantMenuTabProps {
-  isSuspended: boolean;
-  isEditingProduct: boolean;
-  showGroupsManager: boolean;
   restaurantData: Restaurant;
   organizedMenu: { grouped: any[], orphans: any[] } | null;
+  products?: Product[];
+  isEditingProduct: boolean;
+  setIsEditingProduct: (v: boolean) => void;
   selectedProduct: Product | null;
-  isSaving: boolean;
+  setSelectedProduct: (p: Product | null) => void;
+  showGroupsManager: boolean;
+  setShowGroupsManager: (v: boolean) => void;
+  handleSaveProduct: (data: any) => void;
+  handleDeleteProduct: (p: Product) => void;
+  handleAddSection?: (name: string) => void;
+  handleEditSection?: (id: string, newName: string) => void;
+  handleDeleteSectionRequest: (id: string) => void;
   
-  // Actions
-  onSetSelectedProduct: (p: Product | null) => void;
-  onSetIsEditingProduct: (v: boolean) => void;
-  onSetShowGroupsManager: (v: boolean) => void;
-  onDeleteProductClick: (p: Product) => void;
-  onSaveProduct: (data: any) => void;
-  onDeleteSection: (id: string) => void;
-  onUpdateGroups: (groups: any) => void;
-  onNavigateToFinance: () => void;
+  // Opcionais
+  isSuspended?: boolean;
+  isSaving?: boolean;
+  onUpdateGroups?: (groups: any) => void;
+  onNavigateToFinance?: () => void;
 }
 
 export const MerchantMenuTab: React.FC<MerchantMenuTabProps> = ({
-  isSuspended, isEditingProduct, showGroupsManager, restaurantData,
-  organizedMenu, selectedProduct, isSaving,
-  onSetSelectedProduct, onSetIsEditingProduct, onSetShowGroupsManager,
-  onDeleteProductClick, onSaveProduct, onDeleteSection, onUpdateGroups, onNavigateToFinance
+  restaurantData, organizedMenu, isEditingProduct, setIsEditingProduct,
+  selectedProduct, setSelectedProduct, showGroupsManager, setShowGroupsManager,
+  handleSaveProduct, handleDeleteProduct, handleDeleteSectionRequest,
+  isSuspended, isSaving, onUpdateGroups, onNavigateToFinance
 }) => {
 
   return (
@@ -43,12 +46,14 @@ export const MerchantMenuTab: React.FC<MerchantMenuTabProps> = ({
                 <p className="text-sm text-red-700 mt-1">
                    Sua loja está bloqueada. Regularize na aba Financeiro.
                 </p>
-                <button 
-                   onClick={onNavigateToFinance}
-                   className="mt-3 text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg font-bold"
-                >
-                   Regularizar Agora
-                </button>
+                {onNavigateToFinance && (
+                  <button 
+                     onClick={onNavigateToFinance}
+                     className="mt-3 text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg font-bold"
+                  >
+                     Regularizar Agora
+                  </button>
+                )}
              </div>
           </div>
       )}
@@ -61,10 +66,10 @@ export const MerchantMenuTab: React.FC<MerchantMenuTabProps> = ({
                    <h2 className="font-bold text-gray-800 text-lg">Seu Cardápio</h2>
                 </div>
                 <div className="flex gap-2">
-                    <Button size="sm" className="flex-1" onClick={() => { onSetSelectedProduct(null); onSetIsEditingProduct(true); }}>
+                    <Button size="sm" className="flex-1" onClick={() => { setSelectedProduct(null); setIsEditingProduct(true); }}>
                         <Plus size={16} className="mr-1" /> Novo Produto
                     </Button>
-                    <Button size="sm" variant="secondary" className="flex-1 bg-white border border-gray-200" onClick={() => onSetShowGroupsManager(true)}>
+                    <Button size="sm" variant="secondary" className="flex-1 bg-white border border-gray-200" onClick={() => setShowGroupsManager(true)}>
                         <Layers size={16} className="mr-1 text-purple-600" /> Adicionais
                     </Button>
                 </div>
@@ -94,8 +99,8 @@ export const MerchantMenuTab: React.FC<MerchantMenuTabProps> = ({
                                   <p className="text-sm font-bold text-brand-600">R$ {p.price.toFixed(2)}</p>
                               </div>
                               <div className="flex flex-col gap-2 pl-2">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); onSetSelectedProduct(p); onSetIsEditingProduct(true); }} className="p-2 text-gray-400 hover:text-brand-600"><Edit2 size={18}/></button>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); onDeleteProductClick(p); }} className="p-2 text-gray-400 hover:text-red-600"><Trash2 size={18}/></button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedProduct(p); setIsEditingProduct(true); }} className="p-2 text-gray-400 hover:text-brand-600"><Edit2 size={18}/></button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteProduct(p); }} className="p-2 text-gray-400 hover:text-red-600"><Trash2 size={18}/></button>
                               </div>
                             </div>
                         ))}
@@ -107,8 +112,8 @@ export const MerchantMenuTab: React.FC<MerchantMenuTabProps> = ({
           </div>
         ) : showGroupsManager ? (
           <div className="pb-20 animate-in slide-in-from-right-4">
-             <div className="mb-4"><Button variant="ghost" onClick={() => onSetShowGroupsManager(false)} className="pl-0 text-gray-500">← Voltar</Button></div>
-             <MerchantGroupManager groups={restaurantData.addonGroups || []} onUpdateGroups={onUpdateGroups} />
+             <div className="mb-4"><Button variant="ghost" onClick={() => setShowGroupsManager(false)} className="pl-0 text-gray-500">← Voltar</Button></div>
+             <MerchantGroupManager groups={restaurantData.addonGroups || []} onUpdateGroups={onUpdateGroups!} />
           </div>
         ) : (
           <div className="pb-20 animate-in slide-in-from-right-4">
@@ -116,9 +121,9 @@ export const MerchantMenuTab: React.FC<MerchantMenuTabProps> = ({
                 initialData={selectedProduct}
                 sections={restaurantData.menuSections || []}
                 availableAddons={restaurantData.addonGroups || []}
-                onSave={onSaveProduct}
-                onCancel={() => { onSetIsEditingProduct(false); onSetSelectedProduct(null); }}
-                onDeleteSection={onDeleteSection}
+                onSave={handleSaveProduct}
+                onCancel={() => { setIsEditingProduct(false); setSelectedProduct(null); }}
+                onDeleteSection={handleDeleteSectionRequest}
                 isSaving={isSaving}
                 defaultCategory={restaurantData.tags?.[0]} 
               />

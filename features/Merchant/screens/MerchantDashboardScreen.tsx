@@ -67,6 +67,7 @@ export const MerchantDashboardScreen: React.FC<MerchantDashboardScreenProps> = (
       case 'menu':
         return (
           <MerchantMenuTab 
+            restaurantData={restaurantData}
             organizedMenu={organizedMenu}
             products={products}
             isEditingProduct={isEditingProduct}
@@ -80,7 +81,8 @@ export const MerchantDashboardScreen: React.FC<MerchantDashboardScreenProps> = (
             handleAddSection={handleAddSection}
             handleEditSection={handleEditSection}
             handleDeleteSectionRequest={handleDeleteSectionRequest}
-            restaurantId={restaurantData.id}
+            isSuspended={restaurantData?.subscriptionStatus === 'suspended'}
+            onNavigateToFinance={() => setActiveTab('subscription')}
           />
         );
       case 'delivery':
