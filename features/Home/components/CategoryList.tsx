@@ -7,26 +7,48 @@ export const CategoryList: React.FC = () => {
   const { selectedCategoryId, setSelectedCategoryId } = useFilter();
 
   return (
-    <div className="flex space-x-3 overflow-x-auto pb-4 pt-2 no-scrollbar px-4">
+    <div className="flex space-x-4 overflow-x-auto pb-6 pt-2 no-scrollbar px-4 items-start">
       {CATEGORIES.map((cat) => {
         const isSelected = selectedCategoryId === cat.id;
+        const isAll = cat.id === 'all'; // Verifica se é o botão "Todos"
         
         return (
           <button
             key={cat.id}
             onClick={() => setSelectedCategoryId(cat.id)}
-            className={`
-              flex items-center space-x-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm transition-all duration-200
-              ${isSelected 
-                ? 'bg-brand-600 text-white border border-brand-600 shadow-md transform scale-105' 
-                : 'bg-white border border-gray-200 text-gray-700 hover:border-brand-200 hover:text-brand-600'
-              }
-            `}
+            title={cat.name} // Tooltip para passar o mouse (útil já que removemos os nomes)
+            className="flex flex-col items-center gap-2 group min-w-[70px]"
           >
-            <span className={isSelected ? 'text-white' : 'text-gray-500 group-hover:text-brand-600'}>
-              {getCategoryIcon(cat.id, 16)}
-            </span>
-            <span>{cat.name}</span>
+            {/* Container do Ícone */}
+            <div 
+              className={`
+                flex items-center justify-center p-3 rounded-2xl transition-all duration-300 relative
+                ${isSelected 
+                  ? 'bg-brand-50 border-2 border-brand-500 shadow-[0_8px_16px_rgb(0,0,0,0.1)] transform scale-105' 
+                  : 'bg-white border border-gray-100 group-hover:bg-gray-50 group-hover:shadow-md'
+                }
+              `}
+              style={{ 
+                width: '70px', 
+                height: '70px' 
+              }}
+            >
+              <div className="transform transition-transform duration-300 group-hover:scale-110 drop-shadow-sm">
+                 {getCategoryIcon(cat.id, 45)}
+              </div>
+              
+              {/* REMOVIDO: Ponto vermelho de seleção */}
+            </div>
+
+            {/* Texto "Todos": Aparece APENAS no ícone 'all' */}
+            {isAll && (
+              <span className={`
+                text-xs font-bold text-center leading-tight
+                ${isSelected ? 'text-brand-700' : 'text-gray-500 group-hover:text-gray-900'}
+              `}>
+                Todos
+              </span>
+            )}
           </button>
         );
       })}

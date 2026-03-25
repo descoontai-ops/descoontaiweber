@@ -15,13 +15,15 @@ interface ProductDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   isStoreOpen?: boolean; // Nova prop opcional (default true se não passada)
+  onAddToCartSuccess?: (restaurantId: string) => void; // NOVO: Callback para navegação
 }
 
 export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({ 
   product, 
   isOpen, 
   onClose,
-  isStoreOpen = true 
+  isStoreOpen = true,
+  onAddToCartSuccess
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
@@ -144,14 +146,20 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
       };
     }).filter(Boolean) as any[];
 
-    // 3. Adicionar ao carrinho
-    addToCart(product, quantity, note, structuredSelections); 
+    // 3. Adicionar ao carrinho (CORRIGIDO AQUI)
+    // Passando explicitamente o restaurantId como 3º argumento
+    addToCart(product, quantity, product.restaurantId, structuredSelections, note); 
     
     // --- ANALYTICS: REGISTRAR CONVERSÃO (INTENÇÃO DE COMPRA) ---
     // Isso vai contar como "Clique no WhatsApp" no painel de análises
     logWhatsappClick(product.restaurantId, product.id);
 
-    // 4. Fechar modal
+    // 4. Navegação (Se houver callback)
+    if (onAddToCartSuccess) {
+      onAddToCartSuccess(product.restaurantId);
+    }
+
+    // 5. Fechar modal
     onClose();
   };
 

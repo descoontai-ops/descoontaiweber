@@ -181,7 +181,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   };
 
   // Imagem fornecida
-  const BG_IMAGE = "https://github.com/descoontai-ops/imagenspp/blob/main/gigapixel-Gemini_Generated_Image_qcyaxmqcyaxmqcya3%20(1).png?raw=true";
+  const BG_IMAGE = "https://github.com/descoontai-ops/imagenspp/blob/main/capadologin.png?raw=true";
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden">

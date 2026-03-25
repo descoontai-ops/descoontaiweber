@@ -7,7 +7,8 @@ const firebaseConfig = {
   apiKey: "AIzaSyDqM5SctrCUVVR4X5p-LntzcuCxXtxUKJY",
   authDomain: "descoontai-a546a.firebaseapp.com",
   projectId: "descoontai-a546a",
-  storageBucket:  "descoontai-a546a. firebasestorage.app",
+  // CORREÇÃO: Espaço removido na linha abaixo
+  storageBucket: "descoontai-a546a.firebasestorage.app",
   messagingSenderId: "963476566342",
   appId: "1:963476566342:web:c3833bd3d85ea3a341b547"
 };

@@ -5,6 +5,8 @@ import { Restaurant } from '../../../types';
 import { RestaurantCard } from '../../Home/components/RestaurantCard';
 import { Loader2, Star, Truck, ShoppingBag, MessageCircle, Store } from 'lucide-react';
 import { useLocation } from '../../Location/context/LocationContext';
+import { CATEGORIES } from '../../../constants'; // Import das categorias
+import { getCategoryIcon } from '../../Home/utils/categoryIcons'; // Import dos ícones
 
 interface ShopsScreenProps {
   onSelectRestaurant: (id: string) => void;
@@ -15,7 +17,11 @@ type SortCriteria = 'general' | 'delivery' | 'service' | 'product';
 export const ShopsScreen: React.FC<ShopsScreenProps> = ({ onSelectRestaurant }) => {
   const [merchants, setMerchants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Estados de Filtro
   const [activeSort, setActiveSort] = useState<SortCriteria>('general');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  
   const { location } = useLocation();
 
   useEffect(() => {
@@ -97,23 +103,30 @@ export const ShopsScreen: React.FC<ShopsScreenProps> = ({ onSelectRestaurant }) 
   };
 
   const sortedMerchants = useMemo(() => {
-    // Mapeia adicionando o status calculado de aberto/fechado
-    const mapped = merchants.map(m => ({
+    // 1. Filtra por Categoria (se não for 'all')
+    let filtered = merchants;
+    if (activeCategory !== 'all') {
+        filtered = filtered.filter(m => m.category === activeCategory);
+    }
+
+    // 2. Mapeia adicionando o status calculado de aberto/fechado
+    const mapped = filtered.map(m => ({
       ...m,
       _isOpen: isRestaurantOpen(m)
     }));
 
+    // 3. Ordena
     return mapped.sort((a, b) => {
       // 1º CRITÉRIO: STATUS (Aberto > Fechado)
       if (a._isOpen && !b._isOpen) return -1;
       if (!a._isOpen && b._isOpen) return 1;
 
-      // 2º CRITÉRIO: PONTUAÇÃO (Maior > Menor)
+      // 2º CRITÉRIO: PONTUAÇÃO ESPECÍFICA (Maior > Menor)
       let scoreA = 0;
       let scoreB = 0;
 
-      const breakdownA = a.ratingBreakdown || { product: 5, delivery: 5, service: 5 };
-      const breakdownB = b.ratingBreakdown || { product: 5, delivery: 5, service: 5 };
+      const breakdownA = a.ratingBreakdown || { product: 0, delivery: 0, service: 0 };
+      const breakdownB = b.ratingBreakdown || { product: 0, delivery: 0, service: 0 };
 
       switch (activeSort) {
         case 'delivery':
@@ -129,14 +142,29 @@ export const ShopsScreen: React.FC<ShopsScreenProps> = ({ onSelectRestaurant }) 
           scoreB = breakdownB.product;
           break;
         default: // 'general'
-          // Usa a nota geral (rating) como critério principal
-          scoreA = a.rating || 5;
-          scoreB = b.rating || 5;
+          scoreA = a.rating || 0;
+          scoreB = b.rating || 0;
+      }
+
+      // Se as notas forem iguais, desempata por nome
+      if (scoreB === scoreA) {
+          return (a.name || '').localeCompare(b.name || '');
       }
 
       return scoreB - scoreA;
     });
-  }, [merchants, activeSort]);
+  }, [merchants, activeSort, activeCategory]);
+
+  // Função auxiliar para obter a nota correta para exibir no card
+  const getDisplayRating = (merchant: Restaurant) => {
+      const breakdown = merchant.ratingBreakdown || { product: 0, delivery: 0, service: 0 };
+      switch (activeSort) {
+          case 'delivery': return breakdown.delivery;
+          case 'service': return breakdown.service;
+          case 'product': return breakdown.product;
+          default: return undefined; // undefined faz o card usar a nota geral
+      }
+  };
 
   if (loading) {
     return (
@@ -147,6 +175,13 @@ export const ShopsScreen: React.FC<ShopsScreenProps> = ({ onSelectRestaurant }) 
     );
   }
 
+  // CORREÇÃO APLICADA AQUI:
+  // Filtramos a lista CATEGORIES para garantir que não exista duplicidade de IDs 'all' ou nomes 'Todos'
+  const categoryList = [
+      { id: 'all', name: 'Todos' }, 
+      ...CATEGORIES.filter(c => c.id !== 'all' && c.name !== 'Todos')
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header Fixo */}
@@ -156,12 +191,33 @@ export const ShopsScreen: React.FC<ShopsScreenProps> = ({ onSelectRestaurant }) 
                <Store className="text-brand-600" /> Todos os estabelecimentos
             </h1>
             <p className="text-xs text-gray-500 mt-1">
-               Aqui você pode bisbilhotar tudo sobre os estabelecimentos! 👀
+               Encontre o que você procura filtrando por categoria e qualidade.
             </p>
          </div>
 
-         {/* Filtros de Qualidade */}
-         <div className="flex px-4 pb-4 gap-2 overflow-x-auto no-scrollbar">
+         {/* 1. FILTRO DE CATEGORIAS (Carrossel) */}
+         <div className="flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar">
+            {categoryList.map((cat) => {
+                const isSelected = activeCategory === cat.id;
+                return (
+                    <button
+                        key={cat.id}
+                        onClick={() => setActiveCategory(cat.id)}
+                        className={`flex flex-col items-center gap-1 min-w-[60px] transition-opacity ${isSelected ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                    >
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all ${isSelected ? 'bg-brand-50 border-brand-600 shadow-sm' : 'bg-gray-50 border-gray-100'}`}>
+                            {getCategoryIcon(cat.id, 32)}
+                        </div>
+                        <span className={`text-[10px] font-medium truncate w-full text-center ${isSelected ? 'text-brand-700' : 'text-gray-500'}`}>
+                            {cat.name}
+                        </span>
+                    </button>
+                )
+            })}
+         </div>
+
+         {/* 2. FILTROS DE QUALIDADE (Ordenação) */}
+         <div className="flex px-4 pb-4 gap-2 overflow-x-auto no-scrollbar border-t border-gray-100 pt-3">
             <button 
                onClick={() => setActiveSort('general')}
                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap
@@ -214,6 +270,7 @@ export const ShopsScreen: React.FC<ShopsScreenProps> = ({ onSelectRestaurant }) 
                
                <RestaurantCard 
                   restaurant={merchant} 
+                  customRating={getDisplayRating(merchant)} 
                   onClick={() => {
                       if (merchant._isOpen) {
                           onSelectRestaurant(merchant.id);
@@ -225,7 +282,7 @@ export const ShopsScreen: React.FC<ShopsScreenProps> = ({ onSelectRestaurant }) 
 
          {sortedMerchants.length === 0 && (
             <div className="text-center py-10 text-gray-400">
-               <p>Nenhuma loja encontrada.</p>
+               <p>Nenhuma loja encontrada nesta categoria.</p>
             </div>
          )}
       </div>

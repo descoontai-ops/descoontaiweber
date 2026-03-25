@@ -17,18 +17,26 @@ const HomeContent: React.FC<HomeScreenProps> = ({ onSelectRestaurant }) => {
 
   const isSearching = searchQuery.trim().length > 0;
 
+  // URL DA SUA LOGO ORIGINAL
+  const LOGO_URL = "https://raw.githubusercontent.com/descoontai-ops/imagenspp/refs/heads/main/1.png";
+
   return (
     <div className="min-h-screen pb-20 bg-gray-50">
-      {/* Modern Header 2026 Style */}
-      <header className="bg-gradient-to-b from-brand-600 to-brand-500 pt-safe-top px-4 pb-6 sticky top-0 z-30 shadow-lg rounded-b-[24px]">
+      {/* Header Corrigido */}
+      {/* Usei style com env() para garantir o topo correto em qualquer celular */}
+      <header 
+        className="bg-brand-600 px-4 pb-6 sticky top-0 z-30 shadow-lg rounded-b-[24px]"
+        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+      >
         
         {/* Top Bar: Logo & Location */}
-        <div className="flex items-center justify-between mb-5 pt-3">
+        {/* pt-2 para dar um respiro mínimo */}
+        <div className="flex items-center justify-between mb-5 pt-2">
           
-          {/* Logo Container - Glassmorphism */}
+          {/* Logo Container - Restaurado */}
           <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 rounded-2xl shadow-sm">
              <img 
-               src="https://raw.githubusercontent.com/descoontai-ops/imagenspp/refs/heads/main/1.png" 
+               src={LOGO_URL} 
                alt="Descoontaí" 
                className="h-8 w-auto object-contain" 
              />
@@ -50,7 +58,7 @@ const HomeContent: React.FC<HomeScreenProps> = ({ onSelectRestaurant }) => {
           </button>
         </div>
         
-        {/* Search Bar - Floating Effect */}
+        {/* Search Bar */}
         <div className="relative transform transition-all hover:scale-[1.01]">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <Search className="text-brand-500" size={20} />
@@ -77,7 +85,7 @@ const HomeContent: React.FC<HomeScreenProps> = ({ onSelectRestaurant }) => {
       {!isSearching && (
         <>
           <section className="mb-2 mt-2">
-            <PromotionStories />
+            <PromotionStories onSelectRestaurant={onSelectRestaurant} />
           </section>
 
           <section className="px-4 mb-6 mt-2">

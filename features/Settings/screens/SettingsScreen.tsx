@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Bell, MapPin, HelpCircle, LogOut, ChevronRight, Store, LayoutDashboard, Loader2, ShieldCheck, ShoppingBag, Download, Check, BellRing, FileText } from 'lucide-react';
+import { User, Bell, MapPin, HelpCircle, LogOut, ChevronRight, Store, LayoutDashboard, Loader2, ShieldCheck, Download, Check, BellRing, FileText } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { useAuth } from '../../Auth/context/AuthContext';
 import { UserProfileModal } from '../components/UserProfileModal';
@@ -23,7 +23,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onNavigateToAdmin,
   onNavigateToLogin
 }) => {
-  // 1. ADICIONEI O 'refreshUser' AQUI NA LISTA 👇
   const { user, userRole, isLoading: isAuthLoading, logout, refreshUser } = useAuth();
   const { isInstallable, isInstalled, installApp, isIOS, supportsPWA } = usePWA();
   
@@ -152,7 +151,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Header */}
       <div className="bg-white p-6 border-b border-gray-100 flex items-center space-x-4">
         
-        {/* ÁREA DA FOTO DO PERFIL AJUSTADA */}
         <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 overflow-hidden shadow-inner border border-gray-100">
           {userRole === 'merchant' ? (
              <div className="bg-brand-600 w-full h-full flex items-center justify-center text-white">
@@ -160,7 +158,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
              </div>
           ) : (
              user ? (
-               /* Se o usuário tem fotoURL, exibe a imagem. Senão, exibe iniciais. */
                user.photoURL ? (
                  <img 
                    key={user.photoURL} 
@@ -227,9 +224,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
            </button>
         )}
 
+        {/* --- CORREÇÃO DE TAMANHO DO BANNER AQUI --- */}
         {userRole !== 'merchant' && userRole !== 'admin' && (
-           <div className="w-full h-32">
-              <BannerSlider location="settings" aspectRatio="h-32" />
+           <div className="w-full h-36"> {/* Aumentado para h-36 para igualar a Home */}
+              <BannerSlider location="settings" aspectRatio="h-36" />
            </div>
         )}
 
@@ -288,12 +286,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </div>
       </div>
 
-      {/* 2. ATUALIZEI O ONCLOSE AQUI EMBAIXO 👇 */}
       <UserProfileModal 
         isOpen={showProfileModal} 
         onClose={() => {
            setShowProfileModal(false);
-           if(refreshUser) refreshUser(); // Força a atualização da foto
+           if(refreshUser) refreshUser(); 
         }} 
       />
       <AddressManagerModal isOpen={showAddressModal} onClose={() => setShowAddressModal(false)} />

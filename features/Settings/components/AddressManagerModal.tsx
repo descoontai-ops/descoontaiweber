@@ -8,9 +8,10 @@ import { getStates, getCitiesByState, BAIRROS_IGUATU } from '../../Location/serv
 interface AddressManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  zIndex?: number; // ADICIONADO: Permite controlar a altura do modal
 }
 
-export const AddressManagerModal: React.FC<AddressManagerModalProps> = ({ isOpen, onClose }) => {
+export const AddressManagerModal: React.FC<AddressManagerModalProps> = ({ isOpen, onClose, zIndex = 80 }) => {
   const { savedAddresses, addAddress, removeAddress, setDefaultAddress } = useAuth();
   
   const [isAdding, setIsAdding] = useState(false);
@@ -72,7 +73,8 @@ export const AddressManagerModal: React.FC<AddressManagerModalProps> = ({ isOpen
   const isIguatu = city === 'Iguatu';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
+    // ALTERAÇÃO AQUI: Usando style={{ zIndex }} para garantir prioridade sobre o Carrinho (que é z-60)
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in" style={{ zIndex }}>
       <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl m-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
            <h2 className="text-xl font-bold text-gray-800">Meus Endereços</h2>

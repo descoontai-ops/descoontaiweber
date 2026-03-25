@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router } from 'react-router-dom'; // Adicionado para segurança
+import { BrowserRouter as Router, useLocation as useRouterLocation } from 'react-router-dom'; 
 import { HomeScreen } from './features/Home/screens/HomeScreen';
 import { RestaurantScreen } from './features/Restaurant/screens/RestaurantScreen';
 import { CartDrawer } from './features/Checkout/components/CartDrawer';
@@ -20,25 +20,31 @@ import { PWAProvider } from './features/PWA/context/PWAContext';
 import { InstallPWAOverlay } from './features/PWA/components/InstallPWAOverlay'; 
 import { SplashScreen } from './components/layout/SplashScreen'; 
 import { ShopsScreen } from './features/Shops/screens/ShopsScreen';
-import { CartProvider } from './features/Restaurant/hooks/useCart'; // Importante: Adicionei o CartProvider
+import { CartProvider } from './features/Restaurant/hooks/useCart'; 
 import { conditionalPromptForPush } from './features/Notifications/services/notificationService';
+import { OrderPrintScreen } from './features/Orders/screens/OrderPrintScreen';
 
-// Simple View State Management
+// IMPORT DA TELA DE PEDIDOS
+import { MyOrdersScreen } from './features/MyOrders/screens/MyOrdersScreen';
+
 type Screen = 'login_screen' | 'main_tabs' | 'restaurant_detail' | 'merchant_registration' | 'merchant_dashboard' | 'admin_dashboard';
 
 const AppContent: React.FC = () => {
+  const routerLocation = useRouterLocation();
+  
+  if (routerLocation.pathname.startsWith('/imprimir/')) {
+     return <OrderPrintScreen />;
+  }
+
   const { user, userRole, isLoading: isAuthLoading, savedAddresses } = useAuth();
   const { location, setLocation, isLocationModalOpen } = useLocation();
   
-  // Controle da Splash Screen
   const [showSplash, setShowSplash] = useState(true);
 
-  // Estado inicial
   const [currentScreen, setCurrentScreen] = useState<Screen>('login_screen');
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
 
-  // Lógica de tempo mínimo da Splash Screen (3 segundos para completar a animação)
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
@@ -46,7 +52,6 @@ const AppContent: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // OneSignal & Install Strategy Logic
   useEffect(() => {
     const notificationTimer = setTimeout(() => {
        if (user && !showSplash) {
@@ -57,28 +62,25 @@ const AppContent: React.FC = () => {
     return () => clearTimeout(notificationTimer);
   }, [user, showSplash]);
 
-  // 1. SINCRONIZAÇÃO SILENCIOSA: Se o usuário logou e tem endereços no banco, carrega o primeiro.
   useEffect(() => {
     if (user && savedAddresses.length > 0 && !location) {
       setLocation(savedAddresses[0]);
     }
   }, [user, savedAddresses, location, setLocation]);
 
-  // Auth & Routing Logic & DEEP LINKING
   useEffect(() => {
     if (!isAuthLoading) {
       if (user) {
-        // --- USUÁRIO LOGADO (Firebase) ---
         const params = new URLSearchParams(window.location.search);
         const deepLinkStoreId = params.get('s');
 
-        // Lógica de Redirecionamento baseada em Role
         if (userRole === 'merchant') {
-            setCurrentScreen('merchant_dashboard');
+            if (currentScreen !== 'merchant_registration') {
+                setCurrentScreen('merchant_dashboard');
+            }
         } else if (userRole === 'admin') {
             setCurrentScreen('admin_dashboard');
         } else {
-            // Cliente normal
             if (deepLinkStoreId && currentScreen !== 'restaurant_detail') {
                setSelectedRestaurantId(deepLinkStoreId);
                setCurrentScreen('restaurant_detail');
@@ -87,9 +89,7 @@ const AppContent: React.FC = () => {
                setActiveTab('home'); 
             }
         }
-        
       } else {
-        // --- USUÁRIO DESLOGADO ---
         if (currentScreen !== 'merchant_registration') {
            setCurrentScreen('login_screen');
         }
@@ -112,8 +112,9 @@ const AppContent: React.FC = () => {
     }
   };
 
-  // Se estiver carregando o Auth OU o tempo mínimo da splash não passou
-  if (isAuthLoading || showSplash) {
+  const shouldShowSplash = showSplash || (isAuthLoading && currentScreen !== 'merchant_registration');
+
+  if (shouldShowSplash) {
     return <SplashScreen />;
   }
 
@@ -129,6 +130,8 @@ const AppContent: React.FC = () => {
              <ShopsScreen onSelectRestaurant={handleRestaurantSelect} />
           </FilterProvider>
         );
+      case 'orders': // ROTA DE PEDIDOS
+        return <MyOrdersScreen />;
       case 'settings':
         return (
           <SettingsScreen 
@@ -144,19 +147,16 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-gray-50 min-h-screen relative shadow-2xl overflow-hidden">
+    <div className="max-w-md mx-auto bg-gray-50 min-h-screen relative shadow-2xl overflow-hidden pb-16">
       
-      {/* PWA Floating Notification */}
       {user && !isLocationModalOpen && currentScreen !== 'login_screen' && (
         <InstallPWAOverlay />
       )}
 
-      {/* GLOBAL OVERLAYS */}
       <AppMessageOverlay /> 
 
-      {/* Login Screen */}
       {currentScreen === 'login_screen' && (
-        <div className="animate-in fade-in duration-300 z-50 absolute inset-0 bg-white">
+        <div className="animate-in fade-in duration-300 z-50 absolute inset-0 bg-white overflow-y-auto">
           <LoginScreen 
             onBack={user ? () => setCurrentScreen('main_tabs') : undefined}
             onNavigateToMerchantRegistration={() => setCurrentScreen('merchant_registration')}
@@ -165,17 +165,16 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content Area */}
       {currentScreen === 'main_tabs' && user && (
-        <div className="animate-in fade-in duration-300">
+        <div className="animate-in fade-in duration-300 h-full overflow-y-auto">
           {renderTabContent()}
           <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
       )}
       
-      {/* Detail Screens */}
+      {/* CORREÇÃO DO SCROLL: Adicionado overflow-y-auto aqui */}
       {currentScreen === 'restaurant_detail' && selectedRestaurantId && user && (
-        <div className="animate-in slide-in-from-right duration-300">
+        <div className="animate-in slide-in-from-right duration-300 absolute inset-0 bg-white z-40 overflow-y-auto">
           <RestaurantScreen 
             restaurantId={selectedRestaurantId} 
             onBack={() => {
@@ -189,7 +188,6 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Merchant Registration */}
       {currentScreen === 'merchant_registration' && (
         <div className="animate-in slide-in-from-bottom duration-300 z-50 bg-white absolute inset-0 overflow-y-auto">
           <MerchantRegistrationScreen 
@@ -199,21 +197,18 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Merchant Dashboard */}
       {currentScreen === 'merchant_dashboard' && user && (
         <div className="animate-in fade-in duration-300 z-50 bg-gray-50 absolute inset-0 overflow-y-auto">
           <MerchantDashboardScreen onLogout={() => setCurrentScreen('login_screen')} />
         </div>
       )}
 
-      {/* Admin Dashboard */}
       {currentScreen === 'admin_dashboard' && user && (
         <div className="animate-in fade-in duration-300 z-50 bg-gray-100 absolute inset-0 overflow-y-auto">
           <AdminDashboardScreen onBack={() => setCurrentScreen('main_tabs')} />
         </div>
       )}
 
-      {/* User Overlays */}
       {user && (
         <>
           <CartDrawer />
@@ -225,7 +220,6 @@ const AppContent: React.FC = () => {
   );
 };
 
-// AQUI ESTAVA O ERRO NO BACKUP: FALTAVA A ESTRUTURA DE PROVEDORES
 const App: React.FC = () => {
   return (
     <Router>

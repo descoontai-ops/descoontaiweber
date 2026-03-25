@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { CartItem, Product, SelectedGrouping } from '../../../types';
 import { db } from '../../../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -15,7 +15,7 @@ interface AppliedCoupon {
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity: number, note?: string, selectedGroups?: SelectedGrouping[]) => void;
+  addToCart: (product: Product, quantity: number, restaurantId: string, selectedGroups?: SelectedGrouping[], note?: string) => void;
   removeFromCart: (itemId: string) => void;
   updateQuantity: (itemId: string, delta: number) => void;
   clearCart: () => void;
@@ -24,7 +24,7 @@ interface CartContextType {
   isCartOpen: boolean;
   setIsCartOpen: (isOpen: boolean) => void;
   
-  // --- NOVOS MÉTODOS PARA CUPOM ---
+  // --- MÉTODOS PARA CUPOM ---
   appliedCoupon: AppliedCoupon | null;
   applyCoupon: (code: string, merchantId: string) => Promise<{success: boolean, message: string}>;
   removeCoupon: () => void;
@@ -35,9 +35,23 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [items, setItems] = useState<CartItem[]>([]);
+  // Inicializa items do localStorage se existirem
+  const [items, setItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('@descoontai:cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+
+  // Salva no localStorage sempre que items mudar
+  useEffect(() => {
+    localStorage.setItem('@descoontai:cart', JSON.stringify(items));
+  }, [items]);
 
   // 1. Cálculo do Subtotal (Sem desconto)
   const cartTotal = useMemo(() => {
@@ -55,29 +69,35 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 0);
   }, [items]);
 
-  // 2. Cálculo do Desconto
+  // 2. MONITORAMENTO AUTOMÁTICO DO CUPOM
+  useEffect(() => {
+    if (appliedCoupon && appliedCoupon.minOrderValue > 0) {
+      if (cartTotal < appliedCoupon.minOrderValue) {
+        setAppliedCoupon(null);
+      }
+    }
+  }, [cartTotal, appliedCoupon]);
+
+  // 3. Cálculo do Desconto
   const discountAmount = useMemo(() => {
     if (!appliedCoupon) return 0;
-    
-    // Verifica se o valor mínimo ainda é válido (caso o usuário remova itens)
     if (cartTotal < appliedCoupon.minOrderValue) return 0;
 
     if (appliedCoupon.type === 'percent') {
       return cartTotal * (appliedCoupon.value / 100);
     } else {
-      return Math.min(appliedCoupon.value, cartTotal); // Não pode dar mais desconto que o total
+      return Math.min(appliedCoupon.value, cartTotal);
     }
   }, [appliedCoupon, cartTotal]);
 
   const totalWithDiscount = Math.max(0, cartTotal - discountAmount);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  // 3. Função para Aplicar Cupom
+  // 4. Função para Aplicar Cupom
   const applyCoupon = async (code: string, merchantId: string) => {
     try {
       const cleanCode = code.toUpperCase().trim();
       
-      // Busca o cupom dentro da subcoleção do lojista específico
       const q = query(
         collection(db, 'merchants', merchantId, 'coupons'),
         where('code', '==', cleanCode),
@@ -93,11 +113,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const couponData = querySnapshot.docs[0].data();
       const couponId = querySnapshot.docs[0].id;
 
-      // Valida valor mínimo
-      if (cartTotal < couponData.minOrderValue) {
+      if (cartTotal < (couponData.minOrderValue || 0)) {
         return { 
           success: false, 
-          message: `O valor mínimo para este cupom é R$ ${couponData.minOrderValue.toFixed(2)}` 
+          message: `Adicione mais R$ ${(couponData.minOrderValue - cartTotal).toFixed(2)} para usar este cupom.` 
         };
       }
 
@@ -106,7 +125,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         code: cleanCode,
         type: couponData.type,
         value: couponData.value,
-        minOrderValue: couponData.minOrderValue,
+        minOrderValue: couponData.minOrderValue || 0,
         merchantId: merchantId
       });
 
@@ -120,23 +139,57 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const removeCoupon = () => setAppliedCoupon(null);
 
-  const addToCart = (product: Product, quantity: number, note?: string, selectedGroups?: SelectedGrouping[]) => {
+  // --- ADD TO CART (COM CORREÇÃO PARA NÃO ABRIR O CARRINHO SOZINHO) ---
+  const addToCart = (product: Product, quantity: number, restaurantId: string, selectedGroups?: SelectedGrouping[], note?: string) => {
+    
+    // 1. Verificação de Conflito de Restaurante
+    if (items.length > 0) {
+        const currentRestaurantId = items[0].restaurantId;
+        
+        if (currentRestaurantId !== restaurantId) {
+            const confirmSwitch = window.confirm(
+                "⚠️ Atenção\n\nVocê já tem itens de outro restaurante na sacola. Deseja limpar a sacola atual para adicionar itens deste novo restaurante?"
+            );
+
+            if (confirmSwitch) {
+                setAppliedCoupon(null);
+                const uniqueId = `${product.id}-${Date.now()}`; 
+                const newItem: CartItem = {
+                    ...product,
+                    id: uniqueId, 
+                    quantity,
+                    restaurantId: restaurantId,
+                    note: note || '',
+                    selectedGroups: selectedGroups || []
+                };
+                setItems([newItem]);
+                return;
+            } else {
+                return;
+            }
+        }
+    }
+
+    // 2. Fluxo Normal
     setItems(prev => {
       const uniqueId = `${product.id}-${Date.now()}`; 
       const newItem: CartItem = {
         ...product,
         id: uniqueId, 
         quantity,
-        note,
+        restaurantId: restaurantId,
+        note: note || '',
         selectedGroups: selectedGroups || []
       };
       return [...prev, newItem];
     });
+    
+    // REMOVI A LINHA: setIsCartOpen(true);
+    // Agora o carrinho fica fechado até o usuário clicar no botão flutuante.
   };
 
   const removeFromCart = (itemId: string) => {
     setItems(prev => prev.filter(item => item.id !== itemId));
-    // Se o carrinho ficar vazio, remove o cupom
     if (items.length <= 1) setAppliedCoupon(null);
   };
 
@@ -153,6 +206,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     setItems([]);
     setAppliedCoupon(null);
+    localStorage.removeItem('@descoontai:cart');
   };
 
   return (

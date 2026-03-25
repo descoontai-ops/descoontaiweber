@@ -23,6 +23,7 @@ export interface AddonGroup {
   required: boolean;
   min: number;
   max: number;
+  category?: string; // NOVO CAMPO: Para organizar as abas
   items: AddonItem[];
 }
 
@@ -92,7 +93,7 @@ export interface Review {
   createdAt: any;
 }
 
-export type SubscriptionStatus = 'active' | 'overdue' | 'trial' | 'suspended';
+export type SubscriptionStatus = 'active' | 'overdue' | 'trial' | 'suspended' | 'trial_pending';
 export type PaymentMethodType = 'PIX' | 'CREDIT_CARD';
 
 export interface Restaurant {
@@ -117,6 +118,7 @@ export interface Restaurant {
   isOpen: boolean;
   isApproved?: boolean;
   hasActivePromo?: boolean;
+  hasCoupons?: boolean; // ADICIONADO: Para suportar o badge de cupom
   tags: string[];
   description?: string;
   menuSections: MenuSection[];
@@ -129,7 +131,7 @@ export interface Restaurant {
   asaasCustomerId?: string;
   nextDueDate?: any; 
   subscriptionPaymentMethod?: PaymentMethodType;
-  allowCouponsOnPromo?: boolean; // Novo campo
+  allowCouponsOnPromo?: boolean; 
 }
 
 export interface SelectedGrouping {

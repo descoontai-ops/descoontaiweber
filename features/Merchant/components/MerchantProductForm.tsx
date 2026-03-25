@@ -1,9 +1,14 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, X, Check, Info, HelpCircle, AlertTriangle, Trash2, Eye, EyeOff, Layers } from 'lucide-react';
 import { Product, MenuSection, AddonGroup } from '../../../types';
 import { CATEGORIES, PRODUCT_SEARCH_CATEGORIES } from '../../../constants';
 import { Button } from '../../../components/ui/Button';
+
+// Imports de Upload e Compressão
+import { compressImage } from '../../../utils/imageCompression';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../../lib/firebase';
+import { useAuth } from '../../Auth/context/AuthContext';
 
 interface MerchantProductFormProps {
   initialData?: Product | null;
@@ -29,9 +34,11 @@ const MerchantProductFormComponent: React.FC<MerchantProductFormProps> = ({
   onSave, 
   onCancel, 
   onDeleteSection, 
-  isSaving = false,
+  isSaving: propIsSaving = false,
   defaultCategory = '' 
 }) => {
+  const { user } = useAuth(); // Para pegar o ID do lojista para o caminho do storage
+  
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [price, setPrice] = useState(initialData?.price?.toString() || '');
@@ -50,6 +57,8 @@ const MerchantProductFormComponent: React.FC<MerchantProductFormProps> = ({
   ); 
   
   const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image || null);
+  const [imageFile, setImageFile] = useState<File | null>(null); // Novo estado para o arquivo
+
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   
   const [hasDiscount, setHasDiscount] = useState(!!initialData?.originalPrice);
@@ -58,6 +67,10 @@ const MerchantProductFormComponent: React.FC<MerchantProductFormProps> = ({
 
   // Group Selection
   const [enabledGroupIds, setEnabledGroupIds] = useState<string[]>(initialData?.enabledGroupIds || []);
+
+  // Loading local para upload
+  const [localSaving, setLocalSaving] = useState(false);
+  const isSaving = propIsSaving || localSaving;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,19 +94,16 @@ const MerchantProductFormComponent: React.FC<MerchantProductFormProps> = ({
         return;
       }
 
-      // 2. Validação de Tamanho (3MB)
-      const MAX_SIZE = 3 * 1024 * 1024; 
+      // 2. Validação de Tamanho (10MB limite bruto, a compressão vai reduzir)
+      const MAX_SIZE = 10 * 1024 * 1024; 
       if (file.size > MAX_SIZE) {
-        alert(
-          'A imagem é muito grande (Máximo 3MB).\n\n' +
-          'Para evitar sobrecarregar o app, diminua o tamanho aqui:\n' +
-          'https://www.iloveimg.com/pt/comprimir-imagem'
-        );
+        alert('A imagem é muito grande.');
         return;
       }
 
+      setImageFile(file); // Guarda para upload
       const objectUrl = URL.createObjectURL(file);
-      setImagePreview(objectUrl);
+      setImagePreview(objectUrl); // Mostra preview local
     }
   };
 
@@ -103,7 +113,7 @@ const MerchantProductFormComponent: React.FC<MerchantProductFormProps> = ({
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!name || !price) {
@@ -119,36 +129,66 @@ const MerchantProductFormComponent: React.FC<MerchantProductFormProps> = ({
        return;
     }
 
-    let finalSectionId = sectionSelection;
-    if (sectionSelection === '__NEW_CUSTOM__') {
-      finalSectionId = `NEW:::${customSectionName.trim()}`;
-    } else if (sectionSelection.startsWith('__PREDEF__')) {
-      finalSectionId = `NEW:::${sectionSelection.replace('__PREDEF__', '')}`;
+    setLocalSaving(true);
+
+    try {
+        let finalSectionId = sectionSelection;
+        if (sectionSelection === '__NEW_CUSTOM__') {
+          finalSectionId = `NEW:::${customSectionName.trim()}`;
+        } else if (sectionSelection.startsWith('__PREDEF__')) {
+          finalSectionId = `NEW:::${sectionSelection.replace('__PREDEF__', '')}`;
+        }
+
+        // --- LÓGICA DE UPLOAD DA IMAGEM ---
+        let finalImageUrl = imagePreview;
+
+        // Se tem arquivo novo, sobe pro Storage
+        if (imageFile && user) {
+            try {
+               const compressed = await compressImage(imageFile, 0.7, 800); // 800px width
+               // Caminho: merchants/{MERCHANT_ID}/products/{TIMESTAMP}.jpg
+               const storageRef = ref(storage, `merchants/${user.uid}/products/${Date.now()}.jpg`);
+               await uploadBytes(storageRef, compressed);
+               finalImageUrl = await getDownloadURL(storageRef);
+            } catch (err) {
+               console.error("Erro upload imagem produto:", err);
+               alert("Erro ao enviar a imagem. Tente novamente.");
+               setLocalSaving(false);
+               return;
+            }
+        } 
+        
+        // Se não tem imagem nenhuma e é novo, usa placeholder
+        if (!finalImageUrl && !initialData) {
+            const randomSeed = Math.random().toString(36).substring(2, 10);
+            finalImageUrl = `https://picsum.photos/seed/${randomSeed}/300/300`;
+        }
+
+        const payload: any = {
+          name,
+          description,
+          categoryId, 
+          sectionId: finalSectionId,  
+          price: parseFloat(price.replace(',', '.')),
+          image: finalImageUrl,
+          isActive,
+          enabledGroupIds: enabledGroupIds, 
+          ...(initialData ? { id: initialData.id } : {})
+        };
+
+        if (hasDiscount && originalPrice) {
+          payload.originalPrice = parseFloat(originalPrice.replace(',', '.'));
+        } else {
+          payload.originalPrice = undefined;
+        }
+
+        onSave(payload);
+
+    } catch (error) {
+        console.error("Erro ao salvar produto:", error);
+    } finally {
+        setLocalSaving(false);
     }
-
-    // CORREÇÃO: Usar /seed/ para garantir imagem fixa. ?random= muda a imagem a cada request.
-    const randomSeed = Math.random().toString(36).substring(2, 10);
-    const defaultImage = `https://picsum.photos/seed/${randomSeed}/300/300`;
-
-    const payload: any = {
-      name,
-      description,
-      categoryId, 
-      sectionId: finalSectionId,  
-      price: parseFloat(price.replace(',', '.')),
-      image: imagePreview || defaultImage,
-      isActive,
-      enabledGroupIds: enabledGroupIds, // Salva os GRUPOS selecionados
-      ...(initialData ? { id: initialData.id } : {})
-    };
-
-    if (hasDiscount && originalPrice) {
-      payload.originalPrice = parseFloat(originalPrice.replace(',', '.'));
-    } else {
-      payload.originalPrice = undefined;
-    }
-
-    onSave(payload);
   };
 
   const availableSuggestions = PREDEFINED_SECTIONS.filter(

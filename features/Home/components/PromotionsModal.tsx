@@ -10,9 +10,10 @@ interface PromotionsModalProps {
   onClose: () => void;
   categoryName: string; 
   categoryId: string;   
+  onNavigateToRestaurant: (restaurantId: string) => void; 
 }
 
-export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClose, categoryName, categoryId }) => {
+export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClose, categoryName, categoryId, onNavigateToRestaurant }) => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [products, setProducts] = useState<(Product & { _merchantName?: string })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,41 @@ export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClos
            merchantMap[doc.id] = doc.data() as Restaurant;
         });
 
+        // --- FUNÇÃO DE VERIFICAÇÃO DE HORÁRIO (A MESMA DA HOME) ---
+        const isRestaurantOpen = (restaurant: Restaurant): boolean => {
+            // 1. Interruptor Manual
+            if (!restaurant.isOpen) return false;
+
+            // 2. Sem horário? Confia no manual
+            if (!restaurant.schedule) return true;
+
+            const now = new Date();
+            const dayIndex = now.getDay();
+            const keysMap = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            const currentKey = keysMap[dayIndex];
+            const todaySchedule = restaurant.schedule[currentKey];
+
+            // 3. Dia sem expediente
+            if (!todaySchedule || !todaySchedule.isOpen) return false;
+
+            // 4. Cálculo de Horas
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            const [openH, openM] = todaySchedule.open.split(':').map(Number);
+            const [closeH, closeM] = todaySchedule.close.split(':').map(Number);
+            
+            const openTime = openH * 60 + openM;
+            const closeTime = closeH * 60 + closeM;
+
+            // Caso Madrugada (Ex: 18:00 as 02:00)
+            if (closeTime < openTime) {
+               return currentMinutes >= openTime || currentMinutes <= closeTime;
+            }
+
+            // Caso Normal
+            return currentMinutes >= openTime && currentMinutes <= closeTime;
+        };
+        // -----------------------------------------------------------
+
         const loadedProducts: (Product & { _merchantName?: string })[] = [];
 
         snapProds.forEach(doc => {
@@ -54,9 +90,14 @@ export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClos
               
               const merchant = merchantMap[p.restaurantId];
               
-              // Lógica de Filtragem ESTRITA:
-              // Se categoryId for 'all' (TOP Ofertas), aceita qualquer produto com desconto.
-              // Se não, o produto deve ter a categoryId igual à bolinha clicada.
+              // === AQUI ESTÁ A BLINDAGEM ===
+              // Se a loja não existir OU estiver FECHADA, pula esse produto
+              if (!merchant || !isRestaurantOpen(merchant)) {
+                  return; // Pula para o próximo produto
+              }
+              // =============================
+
+              // Lógica de Filtragem de Categoria
               const matchesCategory = 
                  categoryId === 'all' || 
                  p.categoryId === categoryId;
@@ -64,17 +105,16 @@ export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClos
               if (matchesCategory) {
                  loadedProducts.push({
                     ...p,
-                    price, // Garante número
-                    originalPrice, // Garante número
+                    price, 
+                    originalPrice,
                     id: doc.id,
-                    _merchantName: merchant?.name || 'Loja Parceira'
+                    _merchantName: merchant.name // Já validamos que merchant existe
                  });
               }
            }
         });
 
         // --- ORDENAÇÃO POR MAIOR DESCONTO (%) ---
-        // Aqui garantimos que quem tem 50% de desconto aparece antes de quem tem 10%
         loadedProducts.sort((a, b) => {
           const priceA = Number(a.price);
           const originalA = Number(a.originalPrice) || priceA;
@@ -84,7 +124,6 @@ export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClos
           const originalB = Number(b.originalPrice) || priceB;
           const discountPctB = (originalB - priceB) / originalB;
 
-          // Decrescente (Maior % primeiro)
           return discountPctB - discountPctA;
         });
 
@@ -145,7 +184,6 @@ export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClos
                </div>
              ) : (
                products.map((product, index) => {
-                 // Cálculo seguro para exibição
                  const pPrice = Number(product.price);
                  const pOriginal = Number(product.originalPrice);
                  const discountPercent = pOriginal 
@@ -199,6 +237,10 @@ export const PromotionsModal: React.FC<PromotionsModalProps> = ({ isOpen, onClos
         product={selectedProduct}
         isOpen={!!selectedProduct}
         onClose={() => setSelectedProduct(null)}
+        onAddToCartSuccess={(restaurantId) => {
+            onClose(); // Fecha o Modal de Promoção Geral
+            onNavigateToRestaurant(restaurantId); // Navega para o restaurante
+        }}
       />
     </>
   );

@@ -84,31 +84,79 @@ export const CATEGORIES: Category[] = [
   { id: 'salgaderia', name: 'Salgaderia' },
   { id: 'pastelaria', name: 'Pastelaria' },
   { id: 'sushi', name: 'Sushis' },
+  { id: 'tapiocaria', name: 'Tapiocaria' },
   { id: 'acai', name: 'Açaí' },
   { id: 'sorvete', name: 'Sorvetes' },
   { id: 'espetinho', name: 'Espetinhos' },
+  { id: 'cafeteria', name: 'Cafeteria' },
+  { id: 'deposito de bebidas', name: 'Depósito de bebidas' },
   { id: 'agua', name: 'Depósitos de Água' },
+  { id: 'hortifruti', name: 'Hortifruti' },
   { id: 'mercantil', name: 'Mercantil' },
+  { id: 'frigorifico', name: 'Frigorífico' },
+  { id: 'padaria', name: 'Padaria' },
   { id: 'doces', name: 'Doces e Bolos' },
   { id: 'marmitaria', name: 'Marmitarias' },
   { id: 'churrascaria', name: 'Churrascaria' },
   { id: 'farmacia', name: 'Farmácia' },
+  { id: 'petshop', name: 'Petshop' },
 ];
 
 // NOVA LISTA: Categorias Específicas para Busca de Produto / Promoções (Stories)
 // IDs mantidos compatíveis com o sistema, Nomes atualizados conforme solicitação.
 export const PRODUCT_SEARCH_CATEGORIES = [
+ // --- JÁ EXISTENTES (Mantidos) ---
   { id: 'hamburgueria', name: 'Burger' },
   { id: 'pizzaria', name: 'Pizza' },
   { id: 'pastelaria', name: 'Pastel' },
   { id: 'sushi', name: 'Sushi' },
-  { id: 'salgaderia', name: 'Salgado' },
+  { id: 'salgaderia', name: 'Salgados' }, // Ajustei para plural, soa mais natural
   { id: 'acai', name: 'Açaí' },
-  { id: 'sorvete', name: 'Sorvete' },
+  { id: 'sorvete', name: 'Sorvetes' },
   { id: 'marmitaria', name: 'Marmitas' },
-  { id: 'doces', name: 'Doces bolos' },
+  { id: 'doces', name: 'Doces e Bolos' },
   { id: 'espetinho', name: 'Espetinho' },
   { id: 'farmacia', name: 'Farmácia' },
-  { id: 'mercantil', name: 'Mercantil' },
-  { id: 'agua', name: 'Depósito de Água' }
+  { id: 'mercantil', name: 'Mercado' }, // 'Mercado' ou 'Supermercado' é mais comum que Mercantil em algumas regiões
+  { id: 'agua', name: 'Água e Gás' },   // Gás é muito comum vender junto
+
+  // --- BEBIDAS (Essencial) ---
+  { id: 'bebidas', name: 'Bebidas' }, // Geral
+  { id: 'cerveja', name: 'Cervejas' },
+  { id: 'adega', name: 'Adega e Vinhos' },
+  { id: 'sucos', name: 'Sucos Naturais' },
+  { id: 'cafe', name: 'Cafeteria' },
+
+  // --- LANCHES RÁPIDOS & COMIDA DE RUA ---
+  { id: 'cachorro_quente', name: 'Hot Dog' },
+  { id: 'frango_frito', name: 'Frango Frito' }, // Estilo balde (muito popular)
+  { id: 'batata', name: 'Batata Recheada' },
+  { id: 'tapioca', name: 'Tapioca' },
+  { id: 'crepe', name: 'Crepes' },
+ 
+  // --- CULINÁRIA INTERNACIONAL ---
+  { id: 'arabe', name: 'Comida Árabe' }, // Esfihas, Kibe
+  { id: 'chinesa', name: 'Chinesa' }, // Yakisoba
+  { id: 'italiana', name: 'Massas e Italiana' },
+  
+  // --- REFEIÇÕES & TRADICIONAIS ---
+  { id: 'brasileira', name: 'Comida Brasileira' }, // Feijoada, Prato Feito
+  { id: 'churrasco', name: 'Churrasco' },
+  { id: 'frutos_do_mar', name: 'Frutos do Mar' },
+  { id: 'peixes', name: 'Peixes' },
+  { id: 'sopas', name: 'Caldos e Sopas' },
+
+  // --- ESTILO DE VIDA & DIETA ---
+  { id: 'saudavel', name: 'Saudável' },
+  { id: 'vegetariana', name: 'Vegetariana' },
+ 
+
+ 
+  // --- PADARIA & CAFÉ DA MANHÃ ---
+  { id: 'padaria', name: 'Padaria' },
+
+  // --- CONVENIÊNCIA & OUTROS ---
+  { id: 'hortifruti', name: 'Hortifruti' },
+  { id: 'acougue', name: 'Açougue' },
+  { id: 'petshop', name: 'Pet Shop' }, // Itens para pets são muito buscados
 ];

@@ -6,64 +6,181 @@ import { Flame, Loader2 } from 'lucide-react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 
-// Mapeamento de Imagens e Nomes para as categorias DOS STORIES
-// IDs mantidos para compatibilidade, Nomes ajustados conforme pedido.
+// CONFIGURAÇÃO VISUAL DAS CATEGORIAS (STORIES)
+// URLs atualizadas com as novas imagens personalizadas
 const CATEGORY_CONFIG: Record<string, { name: string, image: string }> = {
   'hamburgueria': { 
     name: 'Burger', 
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=150&h=150&fit=crop&q=80' 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/sanduiche.png?raw=true' 
   },
   'pizzaria': { 
     name: 'Pizza', 
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=150&h=150&fit=crop&q=80' 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/pizza.png?raw=true' 
   },
   'pastelaria': { 
     name: 'Pastel', 
-    image: 'https://plus.unsplash.com/premium_photo-1673809798606-f76f70932dc9?w=150&h=150&fit=crop&q=80' 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/pastel.png?raw=true' 
   },
   'sushi': { 
     name: 'Sushi', 
-    image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=150&h=150&fit=crop&q=80' 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/sushi.png?raw=true' 
   },
   'salgaderia': {
     name: 'Salgado',
-    image: 'https://images.unsplash.com/photo-1626074353765-517a681e40be?w=150&h=150&fit=crop&q=80'
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/salgados.png?raw=true'
   },
   'acai': { 
     name: 'Açaí', 
-    image: 'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=150&h=150&fit=crop&q=80' 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/acai.png?raw=true' 
   },
   'sorvete': { 
     name: 'Sorvete', 
-    image: 'https://images.unsplash.com/photo-1560008581-09826d1de69e?w=150&h=150&fit=crop&q=80' 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/sorvete.png?raw=true' 
   },
   'marmitaria': {
     name: 'Marmitas',
-    image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=150&h=150&fit=crop&q=80'
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/marmita.png?raw=true'
   },
   'doces': { 
-    name: 'Doces bolos', 
-    image: 'https://images.unsplash.com/photo-1551024601-5637ade98569?w=150&h=150&fit=crop&q=80' 
+    name: 'Doces', 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/bolos.png?raw=true' 
   },
   'espetinho': { 
     name: 'Espetinho', 
-    image: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=150&h=150&fit=crop&q=80' 
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/espeto.png?raw=true' 
   },
   'farmacia': {
     name: 'Farmácia',
-    image: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=150&h=150&fit=crop&q=80'
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/farmacia.png?raw=true'
   },
   'mercantil': {
     name: 'Mercantil',
-    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=150&h=150&fit=crop&q=80'
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/mercado.png?raw=true'
   },
   'agua': {
-    name: 'Depósito de água',
-    image: 'https://images.unsplash.com/photo-1563453392212-326f5e854473?w=150&h=150&fit=crop&q=80'
+    name: 'Água',
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/agua.png?raw=true'
+  },
+  'churrasco': {
+    name: 'Churrasco',
+    image: 'https://github.com/descoontai-ops/imagensstory/blob/main/carne.png?raw=true'
+  },
+  'cerveja': {
+    name: 'Cervejas',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/cerveja.png?raw=true'
+  },
+  'bebidas': {
+    name: 'Bebidas',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/bebidas.png?raw=true'
+  },
+  'adega': {
+    name: 'Vinhos e Adega',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/adega.png?raw=true'
+  },
+  'sucos': {
+    name: 'Sucos Naturais',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/sucos.png?raw=true'
+  },
+  'cafe': {
+    name: 'Cafeteria',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/cafeteria.png?raw=true'
+  },
+  'cachorro_quente': {
+    name: 'Hot Dog',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/cachorro_quente.png?raw=true'
+  },
+  'padaria': {
+    name: 'Padaria',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/padaria.png?raw=true'
+  },
+  'arabe': {
+    name: 'Comida Árabe',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/arabe.png?raw=true'
+  },
+  'italiana': {
+    name: 'Massas',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/italiana.png?raw=true'
+  },
+  'brasileira': {
+    name: 'Comida Brasileira',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/brasileira.png?raw=true'
+  },
+  'chinesa': {
+    name: 'Chinesa',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/chinesa.png?raw=true'
+      },
+  'sopas': {
+    name: 'Caldos e Sopas',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/sopas.png?raw=true'
+          },
+  'frutos_do_mar': {
+    name: 'Frutos do Mar',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/frutodomar.png?raw=true'
+  },
+  'frango_frito': {
+    name: 'Frango Frito',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/frango_frito.png?raw=true'
+  },
+  'peixes': {
+    name: 'Peixes',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/peixes.png?raw=true'
+  },
+  'tapioca': {
+    name: 'Tapioca',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/tapioca.png?raw=true'
+  },
+  'batata': {
+    name: 'Batata Recheada',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/batata.png?raw=true'
+    },
+  'crepe': {
+    name: 'Crepes',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/crepes.png?raw=true'
+  },
+  'saudavel': {
+    name: 'Saudável',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/saudavel.png?raw=true'
+  },
+  'vegetariana': {
+    name: 'Vegetariana',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/vegetariana.png?raw=true'
+  },
+  'acougue': {
+    name: 'Açougue',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/acougue.png?raw=true'
+  },
+  'hortifruti': {
+    name: 'Hortifruti',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/hortifruti.png?raw=true'
+  },
+  'petshop': {
+    name: 'Pet Shop',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/petshop.png?raw=true'
+  },
+  'congelados': {
+    name: 'Congelados',
+    image: 'https://github.com/descoontai-ops/imagensstory2/blob/main/congelados.png?raw=true'
   }
 };
 
-export const PromotionStories: React.FC = () => {
+// Imagem fixa para "TOP Ofertas"
+const ALL_OFFERS_IMAGE = 'https://github.com/descoontai-ops/imagensstory/blob/main/topromocoes.png?raw=true';
+
+// Função auxiliar para "limpar" o ID da categoria vindo do banco
+const normalizeCategoryId = (id: string): string => {
+  if (!id) return '';
+  return id
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .trim();
+};
+
+interface PromotionStoriesProps {
+  onSelectRestaurant?: (id: string) => void;
+}
+
+export const PromotionStories: React.FC<PromotionStoriesProps> = ({ onSelectRestaurant }) => {
   const [selectedCategory, setSelectedCategory] = useState<{id: string, name: string} | null>(null);
   const [activeStories, setActiveStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,25 +188,24 @@ export const PromotionStories: React.FC = () => {
   useEffect(() => {
     const fetchActivePromotions = async () => {
       try {
-        // 1. Buscar Produtos e Lojas em paralelo para filtrar por horário
         const [productsSnapshot, merchantsSnapshot] = await Promise.all([
           getDocs(query(collection(db, 'products'), where('isActive', '==', true))),
           getDocs(collection(db, 'merchants'))
         ]);
         
-        // Criar mapa de Merchants para acesso rápido
         const merchantsMap: Record<string, Restaurant> = {};
         merchantsSnapshot.forEach(doc => {
            merchantsMap[doc.id] = doc.data() as Restaurant;
         });
 
-        // Função auxiliar para checar se a loja está aberta AGORA
+        // --- LÓGICA DE VERIFICAÇÃO DE HORÁRIO (CORRIGIDA E ROBUSTA) ---
         const isRestaurantOpen = (restaurant: Restaurant): boolean => {
-            // 1. Switch manual
+            // 1. Interruptor Manual (Mestre)
             if (!restaurant.isOpen) return false;
-            
-            // 2. Sem horário definido = considera aberto (se switch estiver on)
-            if (!restaurant.schedule) return true;
+
+            // 2. Sem horário cadastrado? Considera FECHADO para evitar erros (ou ABERTO se preferir 24h)
+            // Minha sugestão: Se não tem horário, confia apenas no manual.
+            if (!restaurant.schedule) return true; 
 
             const now = new Date();
             const dayIndex = now.getDay();
@@ -97,17 +213,26 @@ export const PromotionStories: React.FC = () => {
             const currentKey = keysMap[dayIndex];
             const todaySchedule = restaurant.schedule[currentKey];
 
+            // 3. Se não tem horário para HOJE especificamente, está fechado.
             if (!todaySchedule || !todaySchedule.isOpen) return false;
 
+            // 4. Cálculo de Horas com suporte a Madrugada
             const currentMinutes = now.getHours() * 60 + now.getMinutes();
             const [openH, openM] = todaySchedule.open.split(':').map(Number);
             const [closeH, closeM] = todaySchedule.close.split(':').map(Number);
             
             const openTime = openH * 60 + openM;
-            let closeTime = closeH * 60 + closeM;
+            const closeTime = closeH * 60 + closeM;
 
-            if (closeTime < openTime) closeTime += 24 * 60;
+            // Caso especial: Madrugada (Ex: Abre 18:00 e Fecha 02:00)
+            if (closeTime < openTime) {
+               // A loja está aberta se:
+               // - A hora atual é MAIOR que a abertura (ex: 20:00)
+               // - OU se a hora atual é MENOR que o fechamento (ex: 01:00)
+               return currentMinutes >= openTime || currentMinutes <= closeTime;
+            }
 
+            // Caso normal: Abre 08:00 e Fecha 18:00
             return currentMinutes >= openTime && currentMinutes <= closeTime;
         };
 
@@ -118,31 +243,35 @@ export const PromotionStories: React.FC = () => {
           const product = doc.data() as Product;
           const merchant = merchantsMap[product.restaurantId];
 
-          // REGRA DE OURO: Só conta a promoção se a loja estiver ABERTA
+          // REGRA DE OURO: Só conta a promoção se a loja estiver ABERTA e VÁLIDA
           if (merchant && isRestaurantOpen(merchant)) {
               // Verificar se tem desconto REAL (Original > Preço Atual)
               if (product.originalPrice && product.originalPrice > product.price) {
                 if (product.categoryId) {
-                  activeCategoryIds.add(product.categoryId);
+                  const normalizedId = normalizeCategoryId(product.categoryId);
+                  
+                  if (CATEGORY_CONFIG[normalizedId]) {
+                    activeCategoryIds.add(normalizedId);
+                  }
+                  
                   hasAnyPromo = true;
                 }
               }
           }
         });
 
-        // 3. Montar lista de Stories baseado nas categorias encontradas
         const stories: Story[] = [];
 
-        // Se houver qualquer promoção, adiciona a bolinha "TOP Ofertas" primeiro
+        // Story fixo de TOP OFERTAS
         if (hasAnyPromo) {
           stories.push({
             id: 'all',
             name: 'TOP Ofertas',
-            image: 'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=150&h=150&fit=crop&q=80'
+            image: ALL_OFFERS_IMAGE
           });
         }
 
-        // Adiciona as categorias específicas encontradas nos produtos
+        // Stories das categorias dinâmicas
         activeCategoryIds.forEach((catId) => {
            const config = CATEGORY_CONFIG[catId];
            if (config) {
@@ -165,7 +294,7 @@ export const PromotionStories: React.FC = () => {
 
     fetchActivePromotions();
     
-    // Atualiza a cada 5 minutos para refletir mudanças de horário (abertura/fechamento)
+    // Atualiza a cada 5 min
     const interval = setInterval(fetchActivePromotions, 5 * 60 * 1000);
     return () => clearInterval(interval);
 
@@ -179,7 +308,6 @@ export const PromotionStories: React.FC = () => {
     );
   }
 
-  // Se não tiver nenhuma promoção ativa, esconde a seção inteira
   if (activeStories.length === 0) {
     return null;
   }
@@ -191,7 +319,7 @@ export const PromotionStories: React.FC = () => {
       <div className="px-4 mb-3 flex items-center gap-1.5">
         <Flame size={16} className="text-red-500 fill-red-500 animate-pulse" />
         <h2 className="text-xs font-bold text-red-600 uppercase tracking-wider">
-          Plantão de Promoções
+          Storys de Promoções
         </h2>
       </div>
 
@@ -210,6 +338,7 @@ export const PromotionStories: React.FC = () => {
         onClose={() => setSelectedCategory(null)}
         categoryName={selectedCategory?.name || ''}
         categoryId={selectedCategory?.id || 'all'}
+        onNavigateToRestaurant={(id) => onSelectRestaurant && onSelectRestaurant(id)}
       />
     </div>
   );

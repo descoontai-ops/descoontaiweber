@@ -1,294 +1,262 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { AdBanner, AdBannerConfig } from '../../../types';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Save, ExternalLink, Clock } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
-import { Trash2, Upload, Link as LinkIcon, Clock, Image as ImageIcon, LayoutTemplate, Settings, ExternalLink, Loader2, Save } from 'lucide-react';
+import { compressImage } from '../../../utils/imageCompression';
+
+// Firebase Imports
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { collection, addDoc, deleteDoc, doc, query, orderBy, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { db, storage } from '../../../lib/firebase';
+
+interface Banner {
+  id: string;
+  imageUrl: string;
+  link?: string;
+  active: boolean;
+  createdAt: any;
+}
 
 export const AdBannersTab: React.FC = () => {
-  const [banners, setBanners] = useState<AdBanner[]>([]);
-  const [config, setConfig] = useState<AdBannerConfig>({ slideDuration: 5 });
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  
+  // Slide Config
+  const [slideDuration, setSlideDuration] = useState(5);
 
   // Form State
-  const [location, setLocation] = useState<'home' | 'settings'>('home');
-  const [link, setLink] = useState('');
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [newBannerLink, setNewBannerLink] = useState('');
+  const [newBannerFile, setNewBannerFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Config State
-  const [tempDuration, setTempDuration] = useState(5);
-
+  // 1. Carregar Configuração e LISTENER de Banners
   useEffect(() => {
-    loadData();
+    setLoading(true);
+
+    // A. Buscar Configuração de Tempo (Uma vez)
+    const fetchConfig = async () => {
+       try {
+          const configRef = doc(db, 'settings', 'banners');
+          const configSnap = await getDoc(configRef);
+          if (configSnap.exists()) {
+             setSlideDuration(configSnap.data().slideDuration || 5);
+          }
+       } catch (e) { console.error("Erro config:", e); }
+    };
+    fetchConfig();
+
+    // B. Listener em Tempo Real (Lista de Banners)
+    // Isso garante que a lista apareça assim que o upload terminar
+    const q = query(collection(db, 'banners'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedBanners = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as Banner[];
+        setBanners(fetchedBanners);
+        setLoading(false);
+    }, (error) => {
+        console.error("Erro ao ouvir banners:", error);
+        setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const loadData = () => {
-    const storedBanners = localStorage.getItem('app_ad_banners');
-    const storedConfig = localStorage.getItem('app_ad_config');
-
-    if (storedBanners) setBanners(JSON.parse(storedBanners));
-    if (storedConfig) {
-      const cfg = JSON.parse(storedConfig);
-      setConfig(cfg);
-      setTempDuration(cfg.slideDuration);
-    }
-    setLoading(false);
+  // 2. Salvar Configuração de Tempo
+  const handleSaveConfig = async () => {
+      setSavingConfig(true);
+      try {
+          await setDoc(doc(db, 'settings', 'banners'), {
+              slideDuration: Number(slideDuration)
+          }, { merge: true });
+          alert('Tempo de transição atualizado com sucesso!');
+      } catch (e) {
+          console.error(e);
+          alert('Erro ao salvar configuração (Verifique permissões).');
+      } finally {
+          setSavingConfig(false);
+      }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 3. Manipular Arquivo
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // 1. Validação de Tipo
-      if (!file.type.startsWith('image/')) {
-        alert('Formato inválido. Envie apenas imagens.');
-        return;
-      }
-
-      // 2. Validação de Tamanho (3MB) - Crucial para LocalStorage
-      const MAX_SIZE = 3 * 1024 * 1024;
-      if (file.size > MAX_SIZE) {
-        alert(
-          'A imagem é muito grande (Máx 3MB) e não pode ser salva.\n\n' +
-          'Por favor, comprima aqui: https://www.iloveimg.com/pt/comprimir-imagem'
-        );
-        return;
-      }
-
-      // Convert to Base64 to persist in LocalStorage
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setNewBannerFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
     }
   };
 
-  const handleAddBanner = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!imagePreview) return alert('Selecione uma imagem.');
+  // 4. Salvar Banner
+  const handleSaveBanner = async () => {
+    if (!newBannerFile) {
+      alert('Selecione uma imagem para o banner.');
+      return;
+    }
 
-    setIsSubmitting(true);
+    setUploading(true);
 
-    const newBanner: AdBanner = {
-      id: Math.random().toString(36).substr(2, 9),
-      image: imagePreview,
-      link: link.trim() || undefined,
-      location,
-      createdAt: Date.now()
-    };
+    try {
+      // Compressão
+      const compressedFile = await compressImage(newBannerFile, 0.8, 1200); 
+      
+      // Upload Storage
+      const storageRef = ref(storage, `banners/banner_${Date.now()}.jpg`);
+      await uploadBytes(storageRef, compressedFile);
+      const downloadUrl = await getDownloadURL(storageRef);
 
-    const updatedBanners = [newBanner, ...banners]; // Add to top
-    setBanners(updatedBanners);
-    localStorage.setItem('app_ad_banners', JSON.stringify(updatedBanners));
+      // Salvar Firestore
+      await addDoc(collection(db, 'banners'), {
+        imageUrl: downloadUrl,
+        link: newBannerLink,
+        active: true,
+        createdAt: new Date().toISOString()
+      });
 
-    // Reset Form
-    setImagePreview(null);
-    setLink('');
-    setIsSubmitting(false);
-    alert('Banner adicionado com sucesso!');
-  };
+      // Reset Form
+      setNewBannerFile(null);
+      setPreviewUrl(null);
+      setNewBannerLink('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      
+      alert('Banner publicado!');
 
-  const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja remover este banner?')) {
-      const updated = banners.filter(b => b.id !== id);
-      setBanners(updated);
-      localStorage.setItem('app_ad_banners', JSON.stringify(updated));
+    } catch (error) {
+      console.error("Erro ao salvar banner:", error);
+      alert('Erro ao enviar banner.');
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleConfigUpdate = () => {
-    const newConfig = { slideDuration: tempDuration };
-    setConfig(newConfig);
-    localStorage.setItem('app_ad_config', JSON.stringify(newConfig));
-    alert('Tempo de transição atualizado!');
+  // 5. Deletar Banner
+  const handleDelete = async (banner: Banner) => {
+    if (!confirm('Remover este banner?')) return;
+
+    try {
+      // Deleta do Banco
+      await deleteDoc(doc(db, 'banners', banner.id));
+      
+      // Tenta deletar a imagem (se for do firebase)
+      if (banner.imageUrl.includes('firebasestorage')) {
+         try {
+            const storageRef = ref(storage, banner.imageUrl);
+            await deleteObject(storageRef);
+         } catch (e) { console.warn('Imagem já não existia'); }
+      }
+      // Não precisa atualizar state manual, o onSnapshot fará isso
+    } catch (error) {
+      alert('Erro ao deletar banner.');
+    }
   };
-
-  const homeBanners = banners.filter(b => b.location === 'home');
-  const settingsBanners = banners.filter(b => b.location === 'settings');
-
-  if (loading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-brand-600" /></div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in pb-20">
+    <div className="space-y-8 animate-in fade-in">
       
-      {/* 1. Header & Configuration */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         {/* Upload Form */}
-         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-               <Upload size={20} className="text-brand-600" /> Adicionar Novo Banner
-            </h3>
-            
-            <form onSubmit={handleAddBanner} className="space-y-4">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Location Select */}
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Onde vai aparecer?</label>
-                     <div className="flex gap-2">
-                        <button 
-                          type="button"
-                          onClick={() => setLocation('home')}
-                          className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium flex items-center justify-center gap-2 transition-all ${location === 'home' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
-                        >
-                           <LayoutTemplate size={16} /> Home (Topo)
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => setLocation('settings')}
-                          className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium flex items-center justify-center gap-2 transition-all ${location === 'settings' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
-                        >
-                           <Settings size={16} /> Configs (Anúncio)
-                        </button>
-                     </div>
-                  </div>
-
-                  {/* Link Input */}
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Link de Redirecionamento (Opcional)</label>
-                     <div className="relative">
-                        <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                        <input 
-                          type="text" 
-                          value={link}
-                          onChange={e => setLink(e.target.value)}
-                          placeholder="https://site.com ou vacap"
-                          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                        />
-                     </div>
-                  </div>
-               </div>
-
-               {/* Image Input */}
-               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Imagem do Banner</label>
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden group bg-gray-50"
-                  >
-                     {imagePreview ? (
-                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                     ) : (
-                        <div className="flex flex-col items-center text-gray-400">
-                           <ImageIcon size={32} className="mb-2" />
-                           <span className="text-sm">Clique para fazer upload</span>
-                           <span className="text-xs opacity-70 mt-1">Recomendado: 800x350px (JPG/PNG)</span>
-                        </div>
-                     )}
-                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white font-bold text-sm">Alterar Imagem</span>
-                     </div>
-                  </div>
-                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-                  <p className="text-xs text-gray-400 mt-1 text-center">Máximo 3MB. Utilize o iloveimg.com se precisar comprimir.</p>
-               </div>
-
-               <div className="pt-2">
-                  <Button fullWidth disabled={isSubmitting} isLoading={isSubmitting} type="submit">
-                     {isSubmitting ? 'Salvando...' : 'Publicar Banner'}
-                  </Button>
-               </div>
-            </form>
-         </div>
-
-         {/* Settings Panel */}
-         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-               <Settings size={20} className="text-gray-600" /> Configurações
-            </h3>
-            
-            <div className="space-y-4">
-               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                     <Clock size={16} /> Tempo por Slide (Segundos)
-                  </label>
-                  <div className="flex gap-2">
-                     <input 
-                        type="number" 
-                        min="2" 
-                        max="30"
-                        value={tempDuration}
-                        onChange={e => setTempDuration(parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
-                     />
-                     <button 
-                       onClick={handleConfigUpdate}
-                       className="bg-gray-900 text-white px-4 rounded-lg hover:bg-black transition-colors"
-                     >
-                       <Save size={18} />
-                     </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Tempo que cada banner fica visível antes de passar para o próximo.</p>
-               </div>
-            </div>
-         </div>
+      {/* 1. CONFIGURAÇÃO GERAL */}
+      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+              <div className="bg-brand-50 p-2 rounded-lg text-brand-600"><Clock size={20} /></div>
+              <div>
+                  <h3 className="font-bold text-gray-800 text-sm">Tempo por Slide</h3>
+                  <p className="text-xs text-gray-500">Quanto tempo cada banner aparece</p>
+              </div>
+          </div>
+          <div className="flex items-center gap-2">
+              <input 
+                 type="number" 
+                 min="2" 
+                 max="20"
+                 value={slideDuration}
+                 onChange={(e) => setSlideDuration(Number(e.target.value))}
+                 className="w-16 p-2 border border-gray-200 rounded-lg text-center font-bold outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <span className="text-sm text-gray-500 mr-2">segundos</span>
+              <Button size="sm" onClick={handleSaveConfig} isLoading={savingConfig}>
+                  <Save size={16} />
+              </Button>
+          </div>
       </div>
 
-      {/* 2. Banner Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-         
-         {/* Home Banners List */}
-         <div>
-            <div className="flex items-center justify-between mb-3 px-1">
-               <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                  <LayoutTemplate size={18} /> Banners da Home
-                  <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full">{homeBanners.length}</span>
-               </h3>
+      {/* 2. UPLOAD */}
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <Plus size={20} className="text-brand-600" /> Adicionar Novo Banner
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-xl h-40 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-brand-400 transition-all relative overflow-hidden group"
+            >
+              {previewUrl ? (
+                <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />
+              ) : (
+                <div className="text-center text-gray-400">
+                  <ImageIcon size={32} className="mx-auto mb-2" />
+                  <p className="text-sm font-medium">Clique para selecionar imagem</p>
+                </div>
+              )}
             </div>
-            
-            <div className="space-y-3">
-               {homeBanners.length === 0 && <p className="text-sm text-gray-400 italic">Nenhum banner ativo na Home.</p>}
-               {homeBanners.map(banner => (
-                  <BannerListItem key={banner.id} banner={banner} onDelete={handleDelete} />
-               ))}
-            </div>
-         </div>
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+          </div>
 
-         {/* Settings Banners List */}
-         <div>
-            <div className="flex items-center justify-between mb-3 px-1">
-               <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                  <Settings size={18} /> Banners de Configurações
-                  <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full">{settingsBanners.length}</span>
-               </h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Link ao Clicar (Opcional)</label>
+              <input 
+                type="text" 
+                value={newBannerLink}
+                onChange={e => setNewBannerLink(e.target.value)}
+                placeholder="Ex: https://google.com ou /loja/id"
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+              />
             </div>
-
-            <div className="space-y-3">
-               {settingsBanners.length === 0 && <p className="text-sm text-gray-400 italic">Nenhum banner ativo nas Configurações.</p>}
-               {settingsBanners.map(banner => (
-                  <BannerListItem key={banner.id} banner={banner} onDelete={handleDelete} />
-               ))}
-            </div>
-         </div>
-
+            <Button fullWidth onClick={handleSaveBanner} disabled={uploading || !newBannerFile} isLoading={uploading}>
+              {uploading ? 'Enviando...' : 'Publicar Banner'}
+            </Button>
+          </div>
+        </div>
       </div>
 
+      {/* 3. LISTAGEM */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Banners Ativos ({banners.length})</h3>
+        
+        {loading && <div className="flex justify-center p-4"><Loader2 className="animate-spin text-brand-600"/></div>}
+
+        {!loading && banners.length === 0 && (
+            <p className="text-gray-400 text-center py-4">Nenhum banner cadastrado.</p>
+        )}
+
+        {banners.map((banner) => (
+            <div key={banner.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4 group">
+              <div className="w-24 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-200">
+                  <img src={banner.imageUrl} className="w-full h-full object-cover" alt="Banner" />
+              </div>
+              <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-400 truncate font-mono">{banner.id}</p>
+                  {banner.link ? (
+                      <div className="flex items-center gap-1 text-xs text-brand-600 truncate">
+                          <ExternalLink size={10} /> {banner.link}
+                      </div>
+                  ) : <span className="text-xs text-gray-300">Sem link</span>}
+              </div>
+              <button 
+                  onClick={() => handleDelete(banner)} 
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Excluir"
+              >
+                  <Trash2 size={18} />
+              </button>
+            </div>
+        ))}
+      </div>
     </div>
   );
 };
-
-// Helper Component for List Item
-const BannerListItem: React.FC<{ banner: AdBanner; onDelete: (id: string) => void }> = ({ banner, onDelete }) => (
-   <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex gap-3 items-center group hover:border-brand-200 transition-colors">
-      <div className="w-24 h-14 bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-100">
-         <img src={banner.image} alt="Banner" className="w-full h-full object-cover" />
-      </div>
-      <div className="flex-1 min-w-0">
-         <p className="text-xs text-gray-400 font-mono mb-0.5">ID: {banner.id}</p>
-         {banner.link ? (
-            <a href={banner.link} target="_blank" rel="noreferrer" className="text-sm text-brand-600 hover:underline flex items-center gap-1 truncate">
-               <ExternalLink size={12} /> {banner.link}
-            </a>
-         ) : (
-            <span className="text-sm text-gray-500 italic">Sem link</span>
-         )}
-      </div>
-      <button 
-         onClick={() => onDelete(banner.id)}
-         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-         title="Excluir Banner"
-      >
-         <Trash2 size={18} />
-      </button>
-   </div>
-);

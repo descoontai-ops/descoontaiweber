@@ -1,8 +1,8 @@
-
 import React from 'react';
-import { Home, Search, Store, Settings } from 'lucide-react';
+import { Home, Search, Store, Settings, Receipt } from 'lucide-react'; // Importado Receipt
 
-export type NavTab = 'home' | 'search' | 'shops' | 'settings';
+// Adicionado 'orders' na tipagem
+export type NavTab = 'home' | 'search' | 'shops' | 'orders' | 'settings';
 
 interface BottomNavigationProps {
   activeTab: NavTab;
@@ -10,10 +10,12 @@ interface BottomNavigationProps {
 }
 
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onTabChange }) => {
+  // Adicionado a aba orders no menu
   const navItems: { id: NavTab; icon: React.ElementType }[] = [
     { id: 'home', icon: Home },
     { id: 'search', icon: Search },
     { id: 'shops', icon: Store },
+    { id: 'orders', icon: Receipt },
     { id: 'settings', icon: Settings },
   ];
 

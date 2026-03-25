@@ -1,67 +1,65 @@
-
 import React, { useState, useEffect } from 'react';
-import { AdBanner, AdBannerConfig } from '../../types';
 import { ExternalLink, Loader2 } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
+import { db } from '../../lib/firebase';
+import { useNavigate } from 'react-router-dom';
 
 interface BannerSliderProps {
-  location: 'home' | 'settings';
-  aspectRatio?: string; // Class name for aspect ratio (e.g., 'aspect-[2/1]', 'h-36')
+  location?: 'home' | 'settings'; // Opcional, mantido por compatibilidade
+  aspectRatio?: string; // Ex: 'h-36', 'h-32'
 }
 
 export const BannerSlider: React.FC<BannerSliderProps> = ({ location, aspectRatio = 'h-36' }) => {
-  const [banners, setBanners] = useState<AdBanner[]>([]);
-  const [config, setConfig] = useState<AdBannerConfig>({ slideDuration: 5 });
+  const [banners, setBanners] = useState<{id: string, imageUrl: string, link?: string}[]>([]);
+  const [slideDuration, setSlideDuration] = useState(5000); // 5s padrão
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  // Load Banners
+  
+  // 1. Buscar Configuração e Banners do Firestore
   useEffect(() => {
-    const load = () => {
-      try {
-        const storedBanners = localStorage.getItem('app_ad_banners');
-        const storedConfig = localStorage.getItem('app_ad_config');
-        
-        if (storedBanners) {
-          const all: AdBanner[] = JSON.parse(storedBanners);
-          // Filter by location and Sort by newest
-          const filtered = all
-            .filter(b => b.location === location)
-            .sort((a, b) => b.createdAt - a.createdAt);
-          setBanners(filtered);
-        }
-
-        if (storedConfig) {
-          setConfig(JSON.parse(storedConfig));
-        }
-      } catch (e) {
-        console.error("Erro ao carregar banners", e);
-      } finally {
-        setLoading(false);
-      }
+    // A. Busca tempo de slide
+    const fetchConfig = async () => {
+        try {
+            const configRef = doc(db, 'settings', 'banners');
+            const snap = await getDoc(configRef);
+            if (snap.exists() && snap.data().slideDuration) {
+                setSlideDuration(snap.data().slideDuration * 1000);
+            }
+        } catch (e) { console.error(e); }
     };
-    load();
-    
-    // Listen to storage events (simple way to update if admin changes in another tab, 
-    // though in SPA navigation it updates on mount)
-    window.addEventListener('storage', load);
-    return () => window.removeEventListener('storage', load);
-  }, [location]);
+    fetchConfig();
 
-  // Auto Slide Logic
+    // B. Listener em Tempo Real para Banners
+    const q = query(collection(db, 'banners'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetched = snapshot.docs.map(d => ({
+            id: d.id,
+            imageUrl: d.data().imageUrl,
+            link: d.data().link
+        }));
+        setBanners(fetched);
+        setLoading(false);
+    }, (error) => {
+        console.error("Erro slider:", error);
+        setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Lógica de Rotação Automática
   useEffect(() => {
     if (banners.length <= 1) return;
-
     const interval = setInterval(() => {
       setCurrentIndex(prev => (prev + 1) % banners.length);
-    }, config.slideDuration * 1000);
-
+    }, slideDuration);
     return () => clearInterval(interval);
-  }, [banners.length, config.slideDuration]);
+  }, [banners.length, slideDuration]);
 
-  const handleBannerClick = (banner: AdBanner) => {
-    if (banner.link) {
-      window.open(banner.link, '_blank');
-    }
+  // 3. Manipulador de Clique (Nova Aba)
+  const handleBannerClick = (link?: string) => {
+    if (!link) return;
+    window.open(link, '_blank');
   };
 
   if (loading) return (
@@ -70,70 +68,61 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({ location, aspectRati
     </div>
   );
 
-  // Fallback se não houver banners configurados (Mostra um padrão)
+  // Fallback se não tiver banners
   if (banners.length === 0) {
-     const fallbackImage = location === 'home' 
-        ? "https://picsum.photos/800/350?random=food_banner_default"
-        : "https://picsum.photos/800/350?random=ads_banner_settings_default";
-     
      return (
-       <div className={`w-full ${aspectRatio} rounded-xl overflow-hidden shadow-sm relative bg-gray-200 group`}>
-           <img 
-             src={fallbackImage}
-             alt="Banner Padrão" 
-             className="w-full h-full object-cover"
-           />
-           {/* Publicidade Label */}
-           <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] text-white/90 font-medium uppercase tracking-wider border border-white/10">
-             Publicidade
+       <div className={`w-full ${aspectRatio} rounded-xl overflow-hidden shadow-sm relative bg-gray-100`}>
+           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+               <span className="text-xs font-medium">Anuncie aqui</span>
            </div>
        </div>
      );
   }
 
   return (
-    <div className={`w-full ${aspectRatio} rounded-xl overflow-hidden shadow-sm relative bg-gray-100 group`}>
+    <div className={`w-full ${aspectRatio} rounded-xl overflow-hidden shadow-sm relative bg-white group`}>
        {banners.map((banner, index) => (
          <div 
            key={banner.id}
-           onClick={() => handleBannerClick(banner)}
+           onClick={() => handleBannerClick(banner.link)}
            className={`
              absolute inset-0 w-full h-full transition-opacity duration-700 ease-in-out cursor-pointer
              ${index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}
            `}
          >
+            {/* A CLASSE object-cover GARANTE O TAMANHO EXATO SEM DISTORÇÃO */}
             <img 
-              src={banner.image} 
+              src={banner.imageUrl} 
               alt="Banner Publicidade" 
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
             
+            {/* Gradiente sutil para leitura */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent"></div>
+            
+            {/* Ícone de Link se houver */}
             {banner.link && (
-               <div className="absolute bottom-2 right-2 bg-white/20 backdrop-blur-md p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
+               <div className="absolute bottom-2 right-2 bg-white/30 backdrop-blur-md p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
                   <ExternalLink size={14} />
                </div>
             )}
          </div>
        ))}
 
-       {/* Indicators (Dots) */}
+       {/* Indicadores (Bolinhas) */}
        {banners.length > 1 && (
          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
             {banners.map((_, idx) => (
               <button
                 key={idx}
                 onClick={(e) => { e.stopPropagation(); setCurrentIndex(idx); }}
-                className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentIndex ? 'bg-white w-4' : 'bg-white/50'}`}
+                className={`h-1.5 rounded-full transition-all shadow-sm ${idx === currentIndex ? 'bg-white w-4' : 'bg-white/60 w-1.5'}`}
               />
             ))}
          </div>
        )}
        
-       {/* Label */}
-       <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] text-white/90 font-medium uppercase tracking-wider border border-white/10 z-20 pointer-events-none">
-          Publicidade
-       </div>
+       {/* ETIQUETA "PUBLICIDADE" REMOVIDA AQUI */}
     </div>
   );
 };

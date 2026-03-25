@@ -18,6 +18,9 @@ import { auth, db, googleProvider } from '../../../lib/firebase';
 
 type UserRole = 'guest' | 'user' | 'merchant' | 'admin';
 
+// LISTA DE ADMINS DO SISTEMA (Front-end Force)
+const ADMIN_EMAILS = ['admin@admin.com', 'descoontai@gmail.com'];
+
 interface AuthContextType {
   user: User | null;
   userRole: UserRole;
@@ -47,33 +50,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setIsLoading(true);
+      
       if (currentUser) {
         setUser(currentUser);
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            setUserRole(userData.role as UserRole);
-            if (userData.addresses) setSavedAddresses(userData.addresses);
-          } else {
-            setUserRole('user');
-            try {
-               await setDoc(doc(db, 'users', currentUser.uid), {
-                 email: currentUser.email,
-                 role: 'user',
-                 createdAt: new Date().toISOString()
+        const email = currentUser.email || '';
+        
+        console.log(`[Auth] Verificando acesso para: ${email}`);
+
+        // 1. CHECAGEM SOBERANA DE ADMIN (Ignora Banco de Dados)
+        if (ADMIN_EMAILS.includes(email)) {
+             console.log('[Auth] Admin detectado por email. Forçando acesso.');
+             setUserRole('admin');
+             setIsLoading(false);
+             
+             // Atualiza DB silenciosamente para garantir consistência
+             try {
+               await setDoc(doc(db, 'users', currentUser.uid), { 
+                 role: 'admin', 
+                 email: email 
                }, { merge: true });
-            } catch (e) { console.error(e); }
-          }
-        } catch (error) { console.error(error); setUserRole('user'); }
+             } catch(e) { console.warn('Erro ao sync admin role:', e); }
+             
+             return; // Encerra aqui, não precisa checar mais nada
+        }
+
+        // 2. CHECAGEM DE LOJISTA E USUÁRIO
+        let isMerchant = false;
+        let userData: any = {};
+        
+        // Tenta ler Merchant
+        try {
+           const merchantRef = doc(db, 'merchants', currentUser.uid);
+           const mSnap = await getDoc(merchantRef);
+           if (mSnap.exists()) {
+             isMerchant = true;
+           }
+        } catch (e) {
+           console.warn("[Auth] Erro ao ler merchant:", e);
+        }
+
+        // Tenta ler User
+        try {
+           const userRef = doc(db, 'users', currentUser.uid);
+           const uSnap = await getDoc(userRef);
+           
+           if (uSnap.exists()) {
+              userData = uSnap.data();
+              if (userData.addresses) setSavedAddresses(userData.addresses);
+           } else {
+              // Cria perfil básico se não existir
+              try {
+                await setDoc(userRef, {
+                    email: email,
+                    role: isMerchant ? 'merchant' : 'user',
+                    createdAt: new Date().toISOString()
+                }, { merge: true });
+              } catch (createErr) { console.warn("[Auth] Erro ao criar user:", createErr); }
+           }
+        } catch (e) {
+           console.warn("[Auth] Erro ao ler user:", e);
+        }
+
+        // 3. DECISÃO FINAL
+        if (isMerchant) {
+           console.log('[Auth] Conta identificada como LOJISTA.');
+           setUserRole('merchant');
+           // Auto-correção se o DB de usuários estiver errado
+           if (userData.role !== 'merchant') {
+              setDoc(doc(db, 'users', currentUser.uid), { role: 'merchant' }, { merge: true }).catch(()=>{});
+           }
+        } else {
+           console.log('[Auth] Conta identificada como USUÁRIO.');
+           setUserRole('user');
+        }
+
       } else {
         setUser(null);
         setUserRole('guest');
         setSavedAddresses([]);
       }
+      
       setIsLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -94,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     await signOut(auth);
     setSavedAddresses([]);
+    setUserRole('guest');
   };
 
   const updateProfileName = async (name: string) => {
@@ -115,43 +175,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await sendPasswordResetEmail(auth, email);
   };
 
-  // --- LÓGICA DE ENDEREÇOS APRIMORADA ---
-  
   const saveAddressesToStorage = async (addrs: UserLocation[]) => {
       setSavedAddresses(addrs);
-      // Também atualiza o localStorage para backup rápido
       localStorage.setItem('user_addresses_cache', JSON.stringify(addrs));
-      
       if (user) {
         try {
           await setDoc(doc(db, 'users', user.uid), { addresses: addrs }, { merge: true });
-        } catch (e) { console.error("Erro ao salvar no Firebase:", e); }
+        } catch (e) { console.error("Erro ao salvar endereço:", e); }
       }
   };
 
   const addAddress = (address: UserLocation) => {
-      // Verifica se já existe (para evitar duplicados)
-      const existingIndex = savedAddresses.findIndex(a => 
-        a.street === address.street && a.number === address.number
-      );
-      
+      const existingIndex = savedAddresses.findIndex(a => a.street === address.street && a.number === address.number);
       let newAddrList = [...savedAddresses];
-      
-      // Se já existe, remove o antigo para botar o novo
       if (existingIndex >= 0) newAddrList.splice(existingIndex, 1);
       
-      // Lógica de "Forçar Padrão":
-      // Se for o primeiro endereço da lista OU se o novo endereço veio marcado como isDefault
-      const isFirst = newAddrList.length === 0;
-      const shouldBeDefault = isFirst || address.isDefault;
-
-      if (shouldBeDefault) {
-         // Marca todos os outros como false
+      if (newAddrList.length === 0 || address.isDefault) {
          newAddrList = newAddrList.map(a => ({ ...a, isDefault: false }));
          address.isDefault = true;
       }
-
-      // Adiciona no topo
       newAddrList = [address, ...newAddrList];
       saveAddressesToStorage(newAddrList);
   };
@@ -159,10 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateAddress = (index: number, address: UserLocation) => {
       const newAddrList = [...savedAddresses];
       if (index >= 0 && index < newAddrList.length) {
-          if (address.isDefault) {
-             // Se editou para ser padrão, desmarca os outros
-             newAddrList.forEach(a => a.isDefault = false);
-          }
+          if (address.isDefault) newAddrList.forEach(a => a.isDefault = false);
           newAddrList[index] = address;
           saveAddressesToStorage(newAddrList);
       }
@@ -176,20 +215,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setDefaultAddress = (index: number) => {
       let newAddr = [...savedAddresses];
-      
-      // 1. Desmarca todos
       newAddr = newAddr.map(a => ({ ...a, isDefault: false }));
-      
-      // 2. Marca o escolhido
       if (newAddr[index]) {
         newAddr[index].isDefault = true;
-        
-        // Opcional: Move para o topo da lista
         const item = newAddr[index];
         newAddr.splice(index, 1);
         newAddr.unshift(item);
       }
-
       saveAddressesToStorage(newAddr);
   };
 

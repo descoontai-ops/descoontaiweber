@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, Edit2, X, Sparkles, Check, AlertTriangle, Save } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Sparkles, Check, AlertTriangle, Save, Store, Utensils, IceCream, Pizza, Coffee, Layers, CheckSquare } from 'lucide-react';
 import { AddonGroup, AddonItem, GroupType } from '../../../types';
 import { Button } from '../../../components/ui/Button';
 
@@ -9,7 +8,91 @@ interface MerchantGroupManagerProps {
   onUpdateGroups: (newGroups: AddonGroup[]) => void;
 }
 
-// Dicionário de Correção
+// ------------------------------------------------------------------
+// ÁREA DE CONFIGURAÇÃO MANUAL (AQUI VOCÊ MANDA)
+// ------------------------------------------------------------------
+
+// 1. Defina aqui as abas que você quer ver no topo
+const SECTIONS = [
+  "Adicionais Açai",
+  "Adicionais Hamburgueria",
+  "Adicionais Pizzaria",
+  "Adicionais Sorveteria",
+  "Adicionais Churrascaria",
+  "Adicionais Japonesa",
+  "Adicionais Gerais"
+];
+
+// 2. Defina aqui QUAIS TIPOS de grupo aparecem em CADA ABA
+// Se você não colocar uma aba aqui, ela vai mostrar TODOS os tipos.
+const MANUAL_RULES: Record<string, GroupType[]> = {
+  "Adicionais Açai": [
+    'tipo_de_acai', 
+    'escolha_o_creme', 
+    'adicional_gratis',
+    'adicional',
+    'cobertura', 
+    'colher'
+  ],
+  "Adicionais Hamburgueria": [
+    'adicional',
+    'tipo_de_pao', 
+    'adicional_gratis', 
+    'proteina', // Ex: Ponto da carne
+    'opcao',
+    'ponto_da_carne', 
+    'acompanhamento' // Ex: Batata Frita
+  ],
+  "Adicionais Pizzaria": [
+    'sabores', 
+    'bordas',
+    'adicional', 
+    'ponto_da_carne',
+    'opcao' // Ex: Massa Fina/Grossa
+  ],
+  "Adicionais Sorveteria": [
+    'sabores',
+    'cobertura',
+    'adicional',
+    'acompanhamento' // Ex: Casquinha extra
+  ],
+  "Adicionais Churrascaria": [
+    'proteina',
+    'ponto_da_carne',
+    'tamanho',
+    'guarnicao', // Ex: Arroz, Farofa
+    'adicional'
+  ],
+  "Adicionais Japonesa": [
+    'opcao', // Ex: Grelhado ou Cru
+    'adicional', 
+    'recheio',
+    'molho',// Ex: Cream Cheese extra
+    'adicional_gratis' // Ex: Hashi, Shoyu
+  ],
+  "Adicionais Gerais": [
+    'adicional',
+    'adicional_gratis', 
+    'acompanhamento',
+    'cobertura',
+    'guarnicao',
+    'proteina',
+    'tamanho',
+    'bordas',
+    'tipo_de_pao',
+    'ponto_da_carne',
+    'opcao',
+    'sabores',
+    'recheio',
+    'tipo_de_acai',
+    'escolha_o_creme',
+    'colher'
+  ]
+};
+
+// ------------------------------------------------------------------
+
+// Dicionário de Correção Automática
 const FOOD_CORRECTIONS: Record<string, string> = {
   'parmezao': 'Parmesão', 'parmesao': 'Parmesão', 'musarela': 'Mussarela', 'mussarela': 'Mussarela',
   'calabreza': 'Calabresa', 'bacon': 'Bacon', 'cheedar': 'Cheddar', 'chedar': 'Cheddar',
@@ -19,10 +102,21 @@ const FOOD_CORRECTIONS: Record<string, string> = {
   'morango': 'Morango', 'nutela': 'Nutella', 'confete': 'Confete', 'pacoca': 'Paçoca', 'granola': 'Granola'
 };
 
-const GROUP_TYPES: { id: GroupType; label: string }[] = [
+// Lista completa de todos os tipos disponíveis no sistema
+const ALL_GROUP_TYPES: { id: GroupType; label: string }[] = [
   { id: 'adicional', label: 'Adicionais Pagos' },
-  { id: 'adicional_gratis', label: 'Adicionais Inclusos' },
-  { id: 'acompanhamento', label: 'Acompanhamentos' },
+  { id: 'adicional_gratis', label: 'Adicionais Inclusos (Grátis)' },
+  { id: 'tipo_de_acai', label: 'Tipo de Açai (Obrigatório)' },
+  { id: 'tipo_de_pao', label: 'Tipo de Pão' },
+  { id: 'bordas', label: 'Bordas' },
+  { id: 'escolha_o_creme', label: 'Escolha o Creme' },
+  { id: 'sabores', label: 'Escolha os Sabores' },
+  { id: 'colher', label: 'Colher / Talher' },
+  { id: 'tamanho', label: 'Tamanho (Inteiro/Meio)' },
+  { id: 'acompanhamento', label: 'Acompanhamentos' }, 
+  { id: 'molho', label: 'Molho' }, 
+  { id: 'recheio', label: 'Recheio' }, 
+  { id: 'ponto_da_carne', label: 'Ponto da carne' }, 
   { id: 'cobertura', label: 'Coberturas' },
   { id: 'guarnicao', label: 'Guarnições' },
   { id: 'proteina', label: 'Proteínas / Carnes' },
@@ -30,24 +124,35 @@ const GROUP_TYPES: { id: GroupType; label: string }[] = [
 ];
 
 export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ groups, onUpdateGroups }) => {
+  // Estado da aba ativa
+  const [activeSection, setActiveSection] = useState(SECTIONS[0]); // Começa na primeira aba
+
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  
-  // Refs para Scroll Automático
   const formRef = useRef<HTMLDivElement>(null);
 
   // Group Form State
   const [groupType, setGroupType] = useState<GroupType>('adicional');
   const [groupMin, setGroupMin] = useState(0);
   const [groupMax, setGroupMax] = useState(1);
+  const [groupRequired, setGroupRequired] = useState(false); // <--- NOVO ESTADO: Checkbox Obrigatório
 
-  // Item Form State (dentro de um grupo)
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemPrice, setNewItemPrice] = useState('');
-  const [suggestion, setSuggestion] = useState<string | null>(null);
+  // --- CORREÇÃO DO BUG DE DIGITAÇÃO ---
+  // Dicionário para guardar o que está escrito em cada grupo separadamente
+  const [groupInputs, setGroupInputs] = useState<Record<string, { name: string, price: string, suggestion: string | null }>>({});
 
-  // Efeito: Rolar até o formulário quando abrir
+  const updateGroupInput = (groupId: string, field: 'name' | 'price' | 'suggestion', value: string | null) => {
+    setGroupInputs(prev => ({
+      ...prev,
+      [groupId]: {
+        name: field === 'name' ? (value || '') : (prev[groupId]?.name || ''),
+        price: field === 'price' ? (value || '') : (prev[groupId]?.price || ''),
+        suggestion: field === 'suggestion' ? (value || null) : (prev[groupId]?.suggestion || null)
+      }
+    }));
+  };
+
   useEffect(() => {
     if ((isCreatingGroup || editingGroupId) && formRef.current) {
       formRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -57,9 +162,14 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
   // --- Group Logic ---
 
   const handleStartCreateGroup = () => {
-    setGroupType('adicional');
+    // Tenta pegar o primeiro tipo permitido na aba atual como padrão
+    const allowedTypes = MANUAL_RULES[activeSection];
+    const defaultType = allowedTypes ? allowedTypes[0] : 'adicional';
+    
+    setGroupType(defaultType);
     setGroupMin(0);
     setGroupMax(1);
+    setGroupRequired(false); // Padrão: Não obrigatório
     setIsCreatingGroup(true);
     setEditingGroupId(null);
   };
@@ -68,33 +178,34 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
     if (groupMax < groupMin) return alert('O máximo não pode ser menor que o mínimo.');
     if (groupMax < 1) return alert('O máximo deve ser pelo menos 1.');
 
-    const required = groupMin > 0;
-    
-    // O título é definido automaticamente pelo label do tipo
-    const typeObj = GROUP_TYPES.find(t => t.id === groupType);
+    // A regra de obrigatório agora vem DIRETAMENTE do checkbox, não mais do mínimo
+    const required = groupRequired;
+
+    const typeObj = ALL_GROUP_TYPES.find(t => t.id === groupType);
     const autoTitle = typeObj ? typeObj.label : 'Grupo';
 
     if (editingGroupId) {
-      // Atualizar Grupo Existente
       const updated = groups.map(g => g.id === editingGroupId ? { 
         ...g, 
         title: autoTitle, 
         type: groupType, 
         min: groupMin, 
         max: groupMax,
-        required
+        required, // Salva o valor do checkbox
+        // Mantém a categoria original ou atualiza se estiver vazia
+        category: g.category || activeSection 
       } : g);
       onUpdateGroups(updated);
       setEditingGroupId(null);
     } else {
-      // Criar Novo Grupo
       const newGroup: AddonGroup = {
         id: `grp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         title: autoTitle,
         type: groupType,
         min: groupMin,
         max: groupMax,
-        required,
+        required, // Salva o valor do checkbox
+        category: activeSection, // Aplica a categoria da aba atual
         items: []
       };
       onUpdateGroups([...groups, newGroup]);
@@ -103,64 +214,61 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
   };
 
   const handleDeleteGroup = (e: React.MouseEvent, id: string) => {
-    e.preventDefault(); 
-    e.stopPropagation(); 
-    
+    e.preventDefault(); e.stopPropagation(); 
     if (deleteConfirmId === id) {
-        // Confirmação Realizada
         onUpdateGroups(groups.filter(g => g.id !== id));
         setDeleteConfirmId(null);
     } else {
-        // Primeiro Clique: Pedir Confirmação
         setDeleteConfirmId(id);
-        // Reseta após 4 segundos se não confirmar
         setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 4000);
     }
   };
 
   const handleEditGroupHeader = (e: React.MouseEvent, group: AddonGroup) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
+    e.preventDefault(); e.stopPropagation(); 
     setEditingGroupId(group.id);
     setGroupType(group.type);
     setGroupMin(group.min);
     setGroupMax(group.max);
+    setGroupRequired(group.required); // Carrega o estado salvo do checkbox
     setIsCreatingGroup(false); 
   };
 
   // --- Item Logic ---
 
-  const handleNameChange = (val: string) => {
-    setNewItemName(val);
+  const handleNameChange = (groupId: string, val: string) => {
+    updateGroupInput(groupId, 'name', val);
     const cleanVal = val.toLowerCase().trim().replace(/[^a-z ]/g, '');
     const foundKey = Object.keys(FOOD_CORRECTIONS).find(k => k === cleanVal);
     if (foundKey && FOOD_CORRECTIONS[foundKey] !== val) {
-      setSuggestion(FOOD_CORRECTIONS[foundKey]);
+      updateGroupInput(groupId, 'suggestion', FOOD_CORRECTIONS[foundKey]);
     } else {
-      setSuggestion(null);
+      updateGroupInput(groupId, 'suggestion', null);
     }
   };
 
-  const applySuggestion = () => {
+  const applySuggestion = (groupId: string) => {
+    const suggestion = groupInputs[groupId]?.suggestion;
     if (suggestion) {
-      setNewItemName(suggestion);
-      setSuggestion(null);
+      updateGroupInput(groupId, 'name', suggestion);
+      updateGroupInput(groupId, 'suggestion', null);
     }
   };
 
   const handleAddItemToGroup = (groupId: string, groupType: GroupType) => {
-    if (!newItemName) return;
+    const inputData = groupInputs[groupId];
+    const itemName = inputData?.name;
     
-    // Se for grátis, preço é 0. Senão, faz o parse.
+    if (!itemName) return;
+    
     let price = 0;
     if (groupType !== 'adicional_gratis') {
-        price = parseFloat(newItemPrice.replace(',', '.')) || 0;
+        price = parseFloat((inputData?.price || '').replace(',', '.')) || 0;
     }
     
     const newItem: AddonItem = {
       id: `itm_${Date.now()}_${Math.random().toString(36).substr(2,4)}`,
-      name: newItemName,
+      name: itemName,
       price: price,
       available: true
     };
@@ -173,9 +281,12 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
     });
 
     onUpdateGroups(updatedGroups);
-    setNewItemName('');
-    setNewItemPrice('');
-    setSuggestion(null);
+    // Limpa apenas o input deste grupo
+    setGroupInputs(prev => {
+        const copy = { ...prev };
+        delete copy[groupId];
+        return copy;
+    });
   };
 
   const handleDeleteItem = (groupId: string, itemId: string) => {
@@ -188,15 +299,61 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
     onUpdateGroups(updatedGroups);
   };
 
-  // --- Render ---
+  // --- LÓGICA DE FILTROS ---
+  
+  // 1. Filtra quais grupos aparecem na lista (baseado na aba ativa)
+  const visibleGroups = groups.filter(g => 
+    (g.category || "Adicionais Gerais") === activeSection
+  );
+
+  // 2. Filtra quais TIPOS aparecem no select de criar grupo (baseado no MANUAL_RULES)
+  const availableTypes = ALL_GROUP_TYPES.filter(t => {
+    const allowed = MANUAL_RULES[activeSection];
+    if (!allowed) return true; // Se não tiver regra, libera tudo
+    return allowed.includes(t.id);
+  });
 
   return (
     <div className="space-y-6">
       
-      {/* Botão Novo Grupo */}
+      {/* MENU DE ABAS (Scroll Horizontal no Mobile) */}
+      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-gray-100">
+        {SECTIONS.map(section => (
+          <button
+            key={section}
+            onClick={() => {
+                setActiveSection(section);
+                setIsCreatingGroup(false);
+                setEditingGroupId(null);
+            }}
+            className={`
+              whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all border
+              ${activeSection === section 
+                ? 'bg-brand-500 text-white border-brand-600 shadow-md' 
+                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+              }
+            `}
+          >
+            {section}
+          </button>
+        ))}
+      </div>
+
+      {/* Título da Seção Ativa */}
+      <div className="flex items-center justify-between">
+         <h3 className="font-bold text-gray-800 flex items-center gap-2">
+            <Layers size={18} className="text-brand-600" />
+            {activeSection}
+         </h3>
+         <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-1 rounded-md">
+            {visibleGroups.length} grupos
+         </span>
+      </div>
+
+      {/* Botão Novo Grupo (Vinculado à categoria ativa) */}
       {!isCreatingGroup && !editingGroupId && (
         <Button fullWidth onClick={handleStartCreateGroup} className="bg-gray-900 hover:bg-black text-white">
-          <Plus size={18} className="mr-2" /> Criar Novo Grupo
+          <Plus size={18} className="mr-2" /> Criar em "{activeSection}"
         </Button>
       )}
 
@@ -204,26 +361,55 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
       {(isCreatingGroup || editingGroupId) && (
         <div ref={formRef} className="bg-gray-800 p-5 rounded-xl border border-gray-700 animate-in slide-in-from-top-4 shadow-lg scroll-mt-20">
            <h3 className="text-white font-bold mb-4 flex items-center justify-between">
-             {editingGroupId ? 'Editar Regras' : 'Novo Grupo'}
+             {editingGroupId ? 'Editar Regras' : `Novo Grupo em ${activeSection}`}
              <button onClick={() => {setIsCreatingGroup(false); setEditingGroupId(null);}} className="text-gray-400 hover:text-white"><X size={20}/></button>
            </h3>
 
            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Categoria (Define o Título)</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo do Grupo</label>
                 <select 
                   value={groupType} 
                   onChange={e => setGroupType(e.target.value as GroupType)}
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-brand-500 outline-none appearance-none font-medium"
                 >
-                  {GROUP_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  {/* select obedece regras manuais */}
+                  {availableTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
-                <p className="text-[10px] text-gray-500 mt-1">O nome do grupo será exatamente o selecionado acima.</p>
+                <p className="text-[10px] text-gray-500 mt-1">
+                   Mostrando apenas opções permitidas para {activeSection}.
+                </p>
+              </div>
+
+              {/* CHECKBOX DE OBRIGATÓRIO (NOVO) */}
+              <div 
+                className={`
+                  flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer
+                  ${groupRequired ? 'bg-brand-900/30 border-brand-500/50' : 'bg-gray-900 border-gray-700'}
+                `}
+                onClick={() => setGroupRequired(!groupRequired)}
+              >
+                 <div className={`
+                    w-5 h-5 rounded flex items-center justify-center border transition-colors
+                    ${groupRequired ? 'bg-brand-500 border-brand-500' : 'bg-gray-800 border-gray-600'}
+                 `}>
+                    {groupRequired && <Check size={14} className="text-white" />}
+                 </div>
+                 <div>
+                    <span className={`text-sm font-bold ${groupRequired ? 'text-brand-400' : 'text-gray-300'}`}>
+                       Este grupo é Obrigatório?
+                    </span>
+                    <p className="text-[10px] text-gray-500 leading-tight">
+                       {groupRequired 
+                         ? 'O cliente NÃO conseguirá adicionar ao carrinho sem escolher.' 
+                         : 'O cliente pode pular esta etapa se quiser.'}
+                    </p>
+                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Mínimo (Obrigatório?)</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Mínimo</label>
                     <input 
                       type="number" 
                       min="0"
@@ -231,7 +417,10 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
                       onChange={e => setGroupMin(parseInt(e.target.value))}
                       className="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-brand-500 outline-none"
                     />
-                    <p className="text-[10px] text-gray-500 mt-1">{groupMin > 0 ? 'Obrigatório.' : 'Opcional.'}</p>
+                    {/* Helper text dinâmico */}
+                    <p className={`text-[10px] mt-1 ${groupRequired ? 'text-brand-400 font-bold' : 'text-gray-500'}`}>
+                       {groupRequired ? 'Quantos itens o cliente deve escolher?' : 'Mínimo de escolhas (Geralmente 0).'}
+                    </p>
                  </div>
                  <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Máximo de Itens</label>
@@ -252,25 +441,42 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
         </div>
       )}
 
-      {/* Lista de Grupos Existentes */}
+      {/* Lista de Grupos Existentes (FILTRADA) */}
       <div className="space-y-4">
-        {groups.map(group => {
+        {visibleGroups.length === 0 && !isCreatingGroup && (
+           <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+              <p className="text-gray-400 text-sm">Nenhum grupo nesta categoria.</p>
+           </div>
+        )}
+
+        {visibleGroups.map(group => {
           const isFreeGroup = group.type === 'adicional_gratis';
           const isConfirmingDelete = deleteConfirmId === group.id;
 
+          // Dados do input DESTE grupo
+          const inputData = groupInputs[group.id] || { name: '', price: '', suggestion: null };
+
           return (
-            <div key={group.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div key={group.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in">
                
                {/* Group Header */}
                <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
                   <div>
-                     <h4 className="font-bold text-gray-800 text-base">{group.title}</h4>
+                     <h4 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                       {group.title}
+                       {/* BADGE DE OBRIGATÓRIO NA LISTAGEM */}
+                       {group.required && (
+                         <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase font-bold tracking-wide">
+                           Obrigatório
+                         </span>
+                       )}
+                     </h4>
                      <div className="flex gap-2 mt-1">
                         <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase border ${isFreeGroup ? 'bg-green-100 text-green-700 border-green-200' : 'bg-brand-100 text-brand-700 border-brand-200'}`}>
                            {isFreeGroup ? 'Grátis' : 'Pago'}
                         </span>
                         <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-medium border border-gray-300">
-                          {group.min > 0 ? `Min ${group.min}` : 'Opcional'} • Max {group.max}
+                          {group.min > 0 ? `Min ${group.min}` : '0'} • Max {group.max}
                         </span>
                      </div>
                   </div>
@@ -307,36 +513,35 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
                {/* Items List inside Group */}
                <div className="p-4 bg-white">
                   
-                  {/* Form to Add Item to THIS Group */}
+                  {/* Form to Add Item to THIS Group (ISOLADO) */}
                   <div className="flex items-end gap-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
                      <div className="flex-1">
                         <label className="text-[10px] font-bold text-gray-400 uppercase">Nome do Item</label>
                         <input 
                           type="text" 
                           placeholder="Ex: Leite Condensado"
-                          value={newItemName}
-                          onChange={e => handleNameChange(e.target.value)}
+                          value={inputData.name}
+                          onChange={e => handleNameChange(group.id, e.target.value)}
                           className="w-full bg-white border border-gray-300 px-2 py-1.5 rounded text-sm outline-none focus:border-brand-500 text-gray-900"
                           onKeyDown={(e) => {
                              if(e.key === 'Enter') handleAddItemToGroup(group.id, group.type);
                           }}
                         />
-                        {suggestion && (
-                          <div onClick={applySuggestion} className="text-xs text-brand-600 cursor-pointer mt-1 flex items-center gap-1 hover:underline">
-                             <Sparkles size={10} /> Sugestão: <b>{suggestion}</b>
+                        {inputData.suggestion && (
+                          <div onClick={() => applySuggestion(group.id)} className="text-xs text-brand-600 cursor-pointer mt-1 flex items-center gap-1 hover:underline">
+                             <Sparkles size={10} /> Sugestão: <b>{inputData.suggestion}</b>
                           </div>
                         )}
                      </div>
                      
-                     {/* Campo de Preço: Só aparece se NÃO for grupo grátis */}
                      {!isFreeGroup && (
                        <div className="w-24">
                           <label className="text-[10px] font-bold text-gray-400 uppercase">Preço</label>
                           <input 
                             type="number" 
                             placeholder="0.00"
-                            value={newItemPrice}
-                            onChange={e => setNewItemPrice(e.target.value)}
+                            value={inputData.price}
+                            onChange={e => updateGroupInput(group.id, 'price', e.target.value)}
                             className="w-full bg-white border border-gray-300 px-2 py-1.5 rounded text-sm outline-none focus:border-brand-500 text-gray-900"
                           />
                        </div>
@@ -358,7 +563,6 @@ export const MerchantGroupManager: React.FC<MerchantGroupManagerProps> = ({ grou
                         <div key={item.id} className="flex justify-between items-center py-2 px-3 hover:bg-gray-50 rounded border border-transparent hover:border-gray-100 group/item">
                            <span className="text-sm text-gray-700 font-medium">{item.name}</span>
                            <div className="flex items-center gap-3">
-                              {/* Só mostra preço se for maior que zero */}
                               {item.price > 0 && (
                                 <span className="text-sm font-bold text-brand-600">
                                    + R$ {item.price.toFixed(2)}

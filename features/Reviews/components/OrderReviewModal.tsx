@@ -1,16 +1,15 @@
-
 import React, { useState } from 'react';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { StarRating } from '../../../components/ui/StarRating';
-import { ShoppingBag, Truck, MessageCircle, CheckCircle2, Loader2, Heart } from 'lucide-react';
+import { ShoppingBag, Truck, MessageCircle, CheckCircle2, Heart, AlertCircle } from 'lucide-react'; // Adicionei AlertCircle
 import { submitReview } from '../services/reviewService';
 import { useAuth } from '../../Auth/context/AuthContext';
 
 interface OrderReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onReviewSubmit?: () => void; // NOVO PROP: Ação ao finalizar com sucesso
+  onReviewSubmit?: () => void;
   restaurantId: string;
   restaurantName: string;
 }
@@ -32,35 +31,39 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
 
   const [step, setStep] = useState<'rating' | 'success'>('rating');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null); // Novo estado de erro
 
   const handleSubmit = async () => {
     if (ratings.product === 0 || ratings.delivery === 0 || ratings.service === 0) {
-      alert("Por favor, selecione uma nota para todos os critérios.");
+      setErrorMessage("Por favor, selecione uma nota para todos os critérios.");
       return;
     }
 
     setIsSubmitting(true);
+    setErrorMessage(null); // Limpa erros anteriores
+
     try {
       await submitReview(restaurantId, ratings, user?.displayName || 'Cliente');
       setStep('success');
       
-      // Fecha automaticamente após 3 segundos de sucesso
       setTimeout(() => {
         if (onReviewSubmit) {
-          onReviewSubmit(); // Chama a função que limpa e fecha tudo
+          onReviewSubmit();
         } else {
-          onClose(); // Fallback
+          onClose();
         }
         
-        // Reseta estado após fechar
         setTimeout(() => {
           setStep('rating');
           setRatings({ product: 0, delivery: 0, service: 0 });
+          setErrorMessage(null);
         }, 500);
       }, 2500);
 
-    } catch (error) {
-      alert("Erro ao enviar avaliação. Tente novamente.");
+    } catch (error: any) {
+      // Captura a mensagem de erro exata do serviço (Ex: "Você já avaliou hoje...")
+      const msg = error.message || "Erro ao enviar avaliação. Tente novamente.";
+      setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -89,7 +92,10 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
           rating={value} 
           size={32} 
           interactive={true} 
-          onChange={(val) => setRatings(prev => ({ ...prev, [field]: val }))}
+          onChange={(val) => {
+            setRatings(prev => ({ ...prev, [field]: val }));
+            setErrorMessage(null); // Limpa erro ao interagir
+          }}
         />
       </div>
       <p className="text-center text-xs font-bold text-gray-500 mt-1 h-4">
@@ -99,7 +105,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={step === 'rating' ? "Avalie seu Pedido" : ""}>
+    <Modal isOpen={isOpen} onClose={onClose} title={step === 'rating' ? "Avalie seu Pedido" : ""} zIndex={9999}>
       
       {step === 'success' ? (
         <div className="flex flex-col items-center justify-center py-8 animate-in zoom-in duration-300">
@@ -142,6 +148,14 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
                field="service"
              />
           </div>
+
+          {/* ÁREA DE MENSAGEM DE ERRO (VISUALMENTE CLARA) */}
+          {errorMessage && (
+            <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-lg text-xs font-semibold flex items-center gap-2 animate-in slide-in-from-bottom-2">
+               <AlertCircle size={16} className="shrink-0" />
+               <span>{errorMessage}</span>
+            </div>
+          )}
 
           <div className="pt-2">
             <Button fullWidth onClick={handleSubmit} isLoading={isSubmitting}>

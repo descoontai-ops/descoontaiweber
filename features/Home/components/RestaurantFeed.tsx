@@ -140,10 +140,14 @@ export const RestaurantFeed: React.FC<RestaurantFeedProps> = ({ onSelectRestaura
     const cleanQuery = normalize(searchQuery);
     const hasSearch = cleanQuery.length > 0;
 
-    // 1. Filtragem Inicial (Categoria apenas)
+    // 1. Filtragem Inicial (Categoria)
     if (!hasSearch) {
        if (selectedCategoryId !== 'all') {
-          candidates = candidates.filter(r => r.tags && r.tags.includes(selectedCategoryId));
+          // CORREÇÃO AQUI: Verifica Categoria Principal OU Tags
+          candidates = candidates.filter(r => 
+             r.category === selectedCategoryId || 
+             (r.tags && r.tags.includes(selectedCategoryId))
+          );
        }
        
        // ORDENAÇÃO PRINCIPAL DA HOME:

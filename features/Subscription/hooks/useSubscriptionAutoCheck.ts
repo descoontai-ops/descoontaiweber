@@ -1,60 +1,75 @@
-import { useEffect } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { useState, useEffect } from 'react';
 import { Restaurant } from '../../../types';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
 
-export const useSubscriptionAutoCheck = (restaurant: Restaurant | null) => {
+export const useSubscriptionAutoCheck = (restaurant?: Restaurant) => {
+  const [isOverdue, setIsOverdue] = useState(false);
+  const [isDueToday, setIsDueToday] = useState(false);
+
   useEffect(() => {
-    if (!restaurant || !restaurant.id) return;
+    if (!restaurant || !restaurant.nextDueDate) return;
 
-    const checkValidity = async () => {
-        // Se já estiver suspenso ou for teste, não faz nada
-        if (restaurant.subscriptionStatus === 'suspended' || restaurant.subscriptionStatus === 'trial') return;
+    const checkStatus = async () => {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
 
-        // Se não tiver data, ignora
-        if (!restaurant.nextDueDate) return;
+      let dueDate: Date;
 
-        const now = new Date();
-        
-        // Conversão segura da data do Firebase
-        let dueDate: Date;
-        if (restaurant.nextDueDate instanceof Timestamp) {
-            dueDate = restaurant.nextDueDate.toDate();
-        } else if (typeof restaurant.nextDueDate === 'string') {
-            dueDate = new Date(restaurant.nextDueDate);
-        } else {
-             try {
-                dueDate = new Date((restaurant.nextDueDate as any).seconds * 1000);
-             } catch(e) { return; }
+      // Tratamento para Timestamp do Firebase ou String
+      if (restaurant.nextDueDate?.seconds) {
+        dueDate = new Date(restaurant.nextDueDate.seconds * 1000);
+      } else {
+        dueDate = new Date(restaurant.nextDueDate);
+      }
+      // Ajuste de Fuso Horário simples para evitar erro de "Dia anterior"
+      // Adicionamos 3 horas para garantir que não caia no dia anterior por causa de UTC-3 (Brasília)
+      dueDate.setHours(dueDate.getHours() + 3); 
+      dueDate.setHours(0, 0, 0, 0);
+
+      // 1. Verifica se é HOJE
+      const isToday = now.getTime() === dueDate.getTime();
+      setIsDueToday(isToday);
+
+      // 2. Verifica se JÁ PASSOU (Vencido)
+      const isPast = now.getTime() > dueDate.getTime();
+      setIsOverdue(isPast);
+
+      // 3. Verifica se é FUTURO (Em dia)
+      const isFuture = now.getTime() < dueDate.getTime();
+
+      const currentStatus = restaurant.subscriptionStatus;
+
+      // --- AUTOCORREÇÃO INTELIGENTE (BIDIRECIONAL) ---
+      
+      // CASO A: Venceu mas está como "Active" -> CORRIGE PARA OVERDUE
+      if (isPast && (currentStatus === 'active' || currentStatus === 'trial')) {
+        console.log("⚠️ Auto-Check: Vencido detectado. Bloqueando...");
+        try {
+          await updateDoc(doc(db, 'merchants', restaurant.id), {
+             subscriptionStatus: 'overdue'
+          });
+        } catch (error) {
+          console.error("Erro ao atualizar status:", error);
         }
+      }
 
-        // Calcula atraso em dias
-        const diffTime = now.getTime() - dueDate.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays > 0) {
-            console.log(`[Fiscal] Atraso detectado: ${diffDays} dias`);
-            try {
-                // Regra 1: Atraso entre 1 e 5 dias -> OVERDUE (Aviso)
-                if (diffDays <= 5) {
-                    if (restaurant.subscriptionStatus !== 'overdue') {
-                        await updateDoc(doc(db, 'merchants', restaurant.id), { subscriptionStatus: 'overdue' });
-                        window.location.reload();
-                    }
-                }
-                // Regra 2: Atraso maior que 5 dias -> SUSPENDED (Bloqueio)
-                else {
-                    if (restaurant.subscriptionStatus !== 'suspended') {
-                        await updateDoc(doc(db, 'merchants', restaurant.id), { subscriptionStatus: 'suspended' });
-                        window.location.reload();
-                    }
-                }
-            } catch (error) {
-                console.error("Erro no Fiscal:", error);
-            }
+      // CASO B: Data é Futura (ou Hoje) mas está como "Overdue" -> CORRIGE PARA ACTIVE
+      // (Isso resolve seu problema atual: você mudou a data, ele vai perceber e liberar)
+      if ((isFuture || isToday) && currentStatus === 'overdue') {
+        console.log("✅ Auto-Check: Data válida detectada. Desbloqueando...");
+        try {
+          await updateDoc(doc(db, 'merchants', restaurant.id), {
+             subscriptionStatus: 'active'
+          });
+        } catch (error) {
+          console.error("Erro ao reativar status:", error);
         }
+      }
     };
 
-    checkValidity();
-  }, [restaurant]);
+    checkStatus();
+  }, [restaurant]); // Roda sempre que os dados do restaurante mudarem
+
+  return { isOverdue, isDueToday };
 };
