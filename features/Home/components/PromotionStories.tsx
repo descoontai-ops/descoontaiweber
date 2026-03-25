@@ -243,8 +243,18 @@ export const PromotionStories: React.FC<PromotionStoriesProps> = ({ onSelectRest
           const product = doc.data() as Product;
           const merchant = merchantsMap[product.restaurantId];
 
-          // REGRA DE OURO CORRIGIDA: Só conta a promoção se a loja estiver APROVADA, ABERTA e VÁLIDA
-          if (merchant && merchant.status === 'approved' && isRestaurantOpen(merchant)) {
+          // NOVA VERIFICAÇÃO DE ASSINATURA:
+          // Considera válido se não houver campo de assinatura (para retrocompatibilidade) 
+          // ou se o status da assinatura for um dos permitidos (ativo, trialing/teste, ou free/grátis)
+          const isValidSubscription = !merchant?.subscriptionStatus || 
+            ['active', 'trialing', 'free'].includes(merchant.subscriptionStatus);
+
+          // REGRA DE OURO ATUALIZADA:
+          // 1. Loja existe?
+          // 2. Loja está APROVADA pelo admin?
+          // 3. Assinatura está em dia (ou ganhou mês grátis/trial)?
+          // 4. Loja está ABERTA agora?
+          if (merchant && merchant.status === 'approved' && isValidSubscription && isRestaurantOpen(merchant)) {
               // Verificar se tem desconto REAL (Original > Preço Atual)
               if (product.originalPrice && product.originalPrice > product.price) {
                 if (product.categoryId) {
